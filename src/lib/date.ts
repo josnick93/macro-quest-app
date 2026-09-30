@@ -23,3 +23,18 @@ export const formatLongDate = (iso: string) =>
 
 export const formatShortDate = (iso: string) =>
   parseISO(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+
+export function msUntilMidnight(now = new Date()): number {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return next.getTime() - now.getTime();
+}
+
+/** "Hoy", "Ayer", "Mañana" o la fecha larga. */
+export function relativeDayLabel(iso: string, today: string): string {
+  if (iso === today) return "Hoy";
+  if (iso === addDaysISO(today, -1)) return "Ayer";
+  if (iso === addDaysISO(today, 1)) return "Mañana";
+  return formatLongDate(iso);
+}
+
+export const isISODate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);

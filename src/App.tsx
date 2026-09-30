@@ -1,15 +1,24 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast, Toaster } from "sonner";
 import { BottomNav } from "@/components/BottomNav";
 import { SystemWindow } from "@/components/SystemWindow";
 import { TodayPage } from "@/pages/TodayPage";
 import { AddPage } from "@/pages/AddPage";
 import { RecipesPage } from "@/pages/RecipesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
+import { requestPersistence } from "@/lib/repos/idb";
 
-const qc = new QueryClient();
+const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+// Ningún fallo de lectura/escritura pasa en silencio.
+const qc = new QueryClient({
+  queryCache: new QueryCache({ onError: (e) => toast.error(`No se pudieron leer los datos: ${errorMessage(e)}`, { id: "read-error" }) }),
+  mutationCache: new MutationCache({ onError: (e) => toast.error(`No se pudo guardar: ${errorMessage(e)}`) }),
+});
+
+requestPersistence();
 const ProgressPage = lazy(() => import("@/pages/ProgressPage").then((m) => ({ default: m.ProgressPage })));
 
 function NotFound() {

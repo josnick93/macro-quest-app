@@ -1,11 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronsUp } from "lucide-react";
 
 export function LevelUpWindow({ level, onClose }: { level: number; onClose: () => void }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const t = setTimeout(onClose, 4500);
+    const t = setTimeout(() => closeRef.current(), 4500);
     return () => clearTimeout(t);
-  }, [onClose]);
+  }, [level]);
 
   return (
     <div role="status" aria-live="polite" className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">

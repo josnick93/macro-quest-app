@@ -13,7 +13,7 @@ import type { Food, Recipe, RecipeIngredient } from "@/lib/types";
 import { recipePer100g, recipeRawWeight, recipeTotals, scaleMacros } from "@/lib/nutrition";
 import { uid } from "@/lib/repos/local";
 import { todayISO } from "@/lib/date";
-import { useAddEntry, useRecipes, useRemoveRecipe, useSaveCustomFood, useSaveRecipe } from "@/lib/hooks";
+import { useAddEntries, useRecipes, useRemoveRecipe, useSaveCustomFood, useSaveRecipe } from "@/lib/hooks";
 
 const emptyRecipe = (): Recipe => ({ id: uid(), name: "", ingredients: [], cookedWeight: 0, createdAt: new Date().toISOString() });
 
@@ -143,7 +143,7 @@ function RecipeEditor({ initial, onClose }: { initial: Recipe; onClose: () => vo
 export function RecipesPage() {
   const { data: recipes } = useRecipes();
   const remove = useRemoveRecipe();
-  const addEntry = useAddEntry();
+  const addEntries = useAddEntries();
   const navigate = useNavigate();
   const [editing, setEditing] = useState<Recipe | null>(null);
   const [logging, setLogging] = useState<Recipe | null>(null);
@@ -216,16 +216,17 @@ export function RecipesPage() {
           confirmLabel="Añadir al diario"
           onClose={() => setLogging(null)}
           onConfirm={async (grams, meal) => {
-            await addEntry.mutateAsync({
+            await addEntries.mutateAsync([{
               date: todayISO(),
               meal,
+              kind: "recipe",
               name: logging.name,
               brand: "Mi receta",
               grams,
               per100g: recipePer100g(logging),
               recipeId: logging.id,
               foodId: `recipe:${logging.id}`,
-            });
+            }]);
             toast.success(`${logging.name} · ${grams} g añadido`);
             setLogging(null);
             navigate("/");

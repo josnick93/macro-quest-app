@@ -16,6 +16,8 @@ const COLORS: Record<Props["color"], string> = {
 export function StatBar({ label, value, target, unit = "g", color }: Props) {
   const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
   const tint = COLORS[color];
+  // Sin culpa: pasarse solo cambia el número a ámbar.
+  const over = target > 0 && value > target * 1.1;
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between text-xs">
@@ -23,7 +25,7 @@ export function StatBar({ label, value, target, unit = "g", color }: Props) {
           {label}
         </span>
         <span className="text-muted-foreground tabular-nums">
-          <span className="text-foreground font-medium">{Math.round(value)}</span> / {Math.round(target)} {unit}
+          <span className={over ? "text-over font-medium" : "text-foreground font-medium"}>{Math.round(value)}</span> / {Math.round(target)} {unit}
         </span>
       </div>
       <div

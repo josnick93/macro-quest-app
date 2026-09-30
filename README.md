@@ -8,7 +8,7 @@ App web (PWA) para registrar calorías y macros con estética RPG: misiones diar
 - Progreso: peso corporal, medias de 7 días, XP y racha
 - Perfil: objetivos calculados (Mifflin-St Jeor), exportar/importar datos
 
-**Stack:** Vite · React 19 · TypeScript · Tailwind v4 · TanStack Query · Recharts · html5-qrcode
+**Stack:** Vite · React 19 · TypeScript · Tailwind v4 · TanStack Query · Recharts · ZXing (wasm)
 
 ---
 
@@ -44,6 +44,9 @@ Abre la URL `Network: http://192.168.x.x:5173` en el móvil.
 | `npm run dev` | Servidor de desarrollo con recarga en caliente |
 | `npm run build` | Comprueba tipos y genera `dist/` |
 | `npm run preview` | Sirve `dist/` en local para revisar la build |
+| `npm test` | Tests unitarios (Vitest) |
+
+`NO_SSL=1 npm run dev` arranca sin HTTPS (útil para navegadores que rechazan el certificado autofirmado).
 
 ## Desplegar (Cloudflare Pages, gratis)
 
@@ -62,9 +65,11 @@ Abre la URL https → menú del navegador → **Añadir a pantalla de inicio**.
 
 ## Datos
 
-- Todo se guarda en el navegador (`localStorage`, prefijo `sysnutri:`). Nada sale del dispositivo salvo las búsquedas a Open Food Facts.
+- Todo se guarda en el navegador (IndexedDB, base `macro-quest`). Nada sale del dispositivo salvo las búsquedas a Open Food Facts.
+- La primera vez se migran automáticamente los datos de la versión antigua (`localStorage`, prefijo `sysnutri:`); esas claves se conservan como copia.
+- Versión de esquema y migraciones en `src/lib/repos/migrations.ts`. Cualquier cambio de formato lleva su migración.
 - Cada navegador/dispositivo tiene sus propios datos.
-- **Perfil → Exportar** para copia de seguridad (JSON); **Importar** para restaurarla en otro dispositivo.
+- **Perfil → Exportar** para copia de seguridad (JSON); **Importar** para restaurarla (sustituye los datos; acepta también copias antiguas).
 
 ## Estructura
 
@@ -77,7 +82,7 @@ src/
     xp.ts         Misiones, XP, niveles y rachas
     off.ts        Cliente de Open Food Facts
     hooks.ts      Hooks de datos (React Query)
-    repos/        Capa de datos (localStorage)
+    repos/        Capa de datos (IndexedDB) y migraciones
 public/         manifest, icono, _redirects (SPA)
 ```
 

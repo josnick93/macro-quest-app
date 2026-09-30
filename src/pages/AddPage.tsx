@@ -8,17 +8,21 @@ import { CustomFoodSheet } from "@/components/CustomFoodSheet";
 import { defaultMeal } from "@/components/MealSelect";
 import type { Food, MealType } from "@/lib/types";
 import { MEALS } from "@/lib/types";
-import { todayISO } from "@/lib/date";
-import { useAddEntry, useAddRecent, useRemoveCustomFood, useSaveCustomFood } from "@/lib/hooks";
+import { isISODate, relativeDayLabel } from "@/lib/date";
+import { useAddEntries, useAddRecent, useRemoveCustomFood, useSaveCustomFood, useToday } from "@/lib/hooks";
+import { mealLabel } from "@/components/MealSelect";
 
 export function AddPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const paramMeal = params.get("comida") as MealType | null;
   const meal: MealType = paramMeal && MEALS.some((m) => m.id === paramMeal) ? paramMeal : defaultMeal();
+  const today = useToday();
+  const paramDate = params.get("fecha");
+  const date = isISODate(paramDate) ? paramDate : today;
   const [selected, setSelected] = useState<Food | null>(null);
   const [customEdit, setCustomEdit] = useState<Food | "new" | null>(null);
-  const addEntry = useAddEntry();
+  const addEntries = useAddEntries();
   const addRecent = useAddRecent();
   const saveCustom = useSaveCustomFood();
   const removeCustom = useRemoveCustomFood();
@@ -27,7 +31,9 @@ export function AddPage() {
     <div className="space-y-4">
       <header className="px-1">
         <h1 className="font-display text-2xl font-bold">Añadir alimento</h1>
-        <p className="text-muted-foreground text-xs">Escanea, busca o elige de tus listas</p>
+        <p className="text-muted-foreground text-xs">
+          {paramMeal ? mealLabel(meal) : "Escanea, busca o elige de tus listas"} · {relativeDayLabel(date, today)}
+        </p>
       </header>
 
       <SystemWindow>
@@ -45,20 +51,22 @@ export function AddPage() {
             setCustomEdit(f);
           }}
           onConfirm={async (grams, m) => {
-            await addEntry.mutateAsync({
-              date: todayISO(),
+            const isRecipe = selected.id.startsWith("recipe:");
+            await addEntries.mutateAsync([{
+              date,
               meal: m,
+              kind: isRecipe ? "recipe" : "food",
               name: selected.name,
               brand: selected.brand,
               grams,
               per100g: selected.per100g,
               foodId: selected.id,
-              recipeId: selected.id.startsWith("recipe:") ? selected.id.slice(7) : undefined,
-            });
-            if (!selected.id.startsWith("recipe:")) addRecent.mutate(selected);
+              recipeId: isRecipe ? selected.id.slice(7) : undefined,
+            }]);
+            if (!isRecipe) addRecent.mutate(selected);
             toast.success(`${selected.name} · ${grams} g añadido`);
             setSelected(null);
-            navigate("/");
+            navigate(date === today ? "/" : `/?fecha=${date}`);
           }}
         />
       )}

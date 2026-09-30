@@ -1,4 +1,5 @@
-import type { DiaryEntry, Food, GameState, Profile, Recipe, WeightLog } from "../types";
+import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, Settings, WeightLog } from "../types";
+import type { Snapshot } from "./migrations";
 
 export interface FoodRepository {
   getRecents(): Promise<Food[]>;
@@ -13,11 +14,12 @@ export interface FoodRepository {
 export interface DiaryRepository {
   listByDate(date: string): Promise<DiaryEntry[]>;
   listRange(from: string, to: string): Promise<DiaryEntry[]>;
-  add(entry: Omit<DiaryEntry, "id">): Promise<DiaryEntry>;
-  update(entry: DiaryEntry): Promise<void>;
-  remove(id: string): Promise<void>;
-  /** Copia las comidas de `from` a `to`, añadiéndolas a lo ya registrado. */
-  copyDay(from: string, to: string): Promise<number>;
+  add(entries: NewEntry[]): Promise<DiaryEntry[]>;
+  /** Actualiza o restaura (deshacer) entradas completas. */
+  put(entries: DiaryEntry[]): Promise<void>;
+  remove(ids: string[]): Promise<void>;
+  getNote(date: string): Promise<DayNote | null>;
+  saveNote(date: string, text: string): Promise<void>;
 }
 
 export interface RecipeRepository {
@@ -32,6 +34,8 @@ export interface ProfileRepository {
   saveProfile(profile: Profile): Promise<void>;
   getGame(): Promise<GameState>;
   saveGame(state: GameState): Promise<void>;
+  getSettings(): Promise<Settings>;
+  saveSettings(settings: Settings): Promise<void>;
 }
 
 export interface WeightRepository {
@@ -41,10 +45,17 @@ export interface WeightRepository {
   remove(date: string): Promise<void>;
 }
 
+export interface DataRepository {
+  exportAll(): Promise<Snapshot>;
+  /** Sustituye todos los datos por los del snapshot. */
+  replaceAll(snapshot: Snapshot): Promise<void>;
+}
+
 export interface Repositories {
   foods: FoodRepository;
   diary: DiaryRepository;
   recipes: RecipeRepository;
   profile: ProfileRepository;
   weights: WeightRepository;
+  data: DataRepository;
 }

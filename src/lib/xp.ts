@@ -1,4 +1,5 @@
 import type { DiaryEntry, GameState, Macros, Targets } from "./types";
+import { addDaysISO } from "./date";
 
 export const XP_PER_LEVEL_BASE = 250;
 
@@ -23,6 +24,21 @@ export function levelProgress(xp: number) {
   };
 }
 
+/**
+ * Racha = días seguidos con registro que terminan hoy.
+ * Si hoy aún no hay registro, la racha de ayer sigue viva (el día no ha acabado).
+ */
+export function currentStreak(activeDays: readonly string[], today: string): number {
+  const days = new Set(activeDays);
+  let cursor = days.has(today) ? today : addDaysISO(today, -1);
+  let streak = 0;
+  while (days.has(cursor)) {
+    streak++;
+    cursor = addDaysISO(cursor, -1);
+  }
+  return streak;
+}
+
 export interface Quest {
   id: string;
   label: string;
@@ -31,8 +47,13 @@ export interface Quest {
   progress: string;
 }
 
+/** Margen alrededor del objetivo de kcal que cuenta como día cumplido. */
+export const KCAL_TOLERANCE = 0.1;
+
 export function dailyQuests(entries: DiaryEntry[], totals: Macros, targets: Targets): Quest[] {
   const meals = new Set(entries.map((e) => e.meal)).size;
+  const low = Math.round(targets.kcal * (1 - KCAL_TOLERANCE));
+  const high = Math.round(targets.kcal * (1 + KCAL_TOLERANCE));
   return [
     { id: "meals3", label: "Registrar 3 comidas", xp: 40, done: meals >= 3, progress: `${Math.min(meals, 3)}/3` },
     {
@@ -44,17 +65,17 @@ export function dailyQuests(entries: DiaryEntry[], totals: Macros, targets: Targ
     },
     {
       id: "kcal",
-      label: "No pasarse de calorías",
+      label: "Quedar en tu objetivo de kcal (±10 %)",
       xp: 40,
-      done: entries.length > 0 && totals.kcal <= targets.kcal,
-      progress: `${Math.round(totals.kcal)}/${targets.kcal} kcal`,
+      done: totals.kcal >= low && totals.kcal <= high,
+      progress: `${Math.round(totals.kcal)} kcal · rango ${low}–${high}`,
     },
   ];
 }
 
 export const XP_PER_ENTRY = 10;
 export const MAX_ENTRY_AWARDS = 8;
-export const XP_STREAK = 15;
+export const XP_ACTIVE_DAY = 15;
 
 export interface XpSyncResult {
   state: GameState;
@@ -62,14 +83,11 @@ export interface XpSyncResult {
   levelUp: number | null;
 }
 
-/** Otorga la XP pendiente del día sin duplicar recompensas ya dadas. */
-export function syncDayXp(
-  state: GameState,
-  date: string,
-  entries: DiaryEntry[],
-  quests: Quest[],
-  yesterday: string,
-): XpSyncResult {
+/**
+ * Otorga la XP pendiente de un día sin duplicar recompensas ya dadas.
+ * Nunca quita XP: borrar o pasarse no castiga.
+ */
+export function syncDayXp(state: GameState, date: string, entries: DiaryEntry[], quests: Quest[]): XpSyncResult {
   const awarded = new Set(state.awarded);
   let xp = state.xp;
   let gained = 0;
@@ -84,13 +102,9 @@ export function syncDayXp(
   for (let i = 0; i < entryCount; i++) give(`${date}:entry:${i}`, XP_PER_ENTRY);
   for (const q of quests) if (q.done) give(`${date}:${q.id}`, q.xp);
 
-  let streak = state.streak;
-  let lastActiveDate = state.lastActiveDate;
-  if (entries.length > 0 && lastActiveDate !== date) {
-    streak = lastActiveDate === yesterday ? streak + 1 : 1;
-    lastActiveDate = date;
-    give(`${date}:streak`, XP_STREAK);
-  }
+  const activeDays =
+    entries.length > 0 && !state.activeDays.includes(date) ? [...state.activeDays, date].sort() : state.activeDays;
+  if (entries.length > 0) give(`${date}:streak`, XP_ACTIVE_DAY);
 
   const beforeLevel = levelFromXp(state.xp);
   const afterLevel = levelFromXp(xp);
@@ -99,7 +113,8 @@ export function syncDayXp(
   history.sort((a, b) => a.date.localeCompare(b.date));
 
   return {
-    state: { xp, streak, lastActiveDate, awarded: [...awarded].slice(-400), history: history.slice(-120) },
+    // `awarded` solo necesita recordar los días recientes (~12 claves/día).
+    state: { xp, activeDays, awarded: [...awarded].slice(-2000), history: history.slice(-400) },
     gained,
     levelUp: afterLevel > beforeLevel ? afterLevel : null,
   };

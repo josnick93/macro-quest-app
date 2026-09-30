@@ -5,9 +5,10 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { SystemWindow } from "@/components/SystemWindow";
 import { Sheet } from "@/components/Sheet";
 import { XPBar } from "@/components/XPBar";
-import { addDaysISO, formatShortDate, todayISO } from "@/lib/date";
+import { addDaysISO, formatShortDate } from "@/lib/date";
+import { currentStreak } from "@/lib/xp";
 import { totalsFor } from "@/lib/nutrition";
-import { useDiaryRange, useGame, useRemoveWeight, useSaveWeight, useTargets, useWeights } from "@/lib/hooks";
+import { useDiaryRange, useGame, useRemoveWeight, useSaveWeight, useTargets, useToday, useWeights } from "@/lib/hooks";
 
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false } as const;
 const tip = {
@@ -16,7 +17,7 @@ const tip = {
 };
 
 export function ProgressPage() {
-  const today = todayISO();
+  const today = useToday();
   const from = addDaysISO(today, -6);
   const { data: weights } = useWeights();
   const { data: week } = useDiaryRange(from, today);
@@ -27,6 +28,7 @@ export function ProgressPage() {
   const [open, setOpen] = useState(false);
   const [wDate, setWDate] = useState(today);
   const [kg, setKg] = useState("");
+  const streak = currentStreak(game.activeDays, today);
 
   const days = Array.from({ length: 7 }, (_, i) => addDaysISO(from, i));
   const daily = days.map((d) => {
@@ -58,7 +60,7 @@ export function ProgressPage() {
         <p className="text-muted-foreground text-xs">Estadísticas del jugador</p>
       </header>
 
-      <XPBar xp={game.xp} streak={game.streak} />
+      <XPBar xp={game.xp} streak={streak} />
 
       <SystemWindow
         title="Peso corporal"
@@ -147,11 +149,11 @@ export function ProgressPage() {
             <p className="label-sys">XP total</p>
           </div>
           <div>
-            <p className="font-display text-xl font-bold tabular-nums">{game.streak}</p>
+            <p className="font-display text-xl font-bold tabular-nums">{streak}</p>
             <p className="label-sys">racha</p>
           </div>
           <div>
-            <p className="font-display text-xl font-bold tabular-nums">{game.history.length}</p>
+            <p className="font-display text-xl font-bold tabular-nums">{game.activeDays.length}</p>
             <p className="label-sys">días activos</p>
           </div>
         </div>

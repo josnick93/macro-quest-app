@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { SystemWindow } from "@/components/SystemWindow";
-import type { Activity, Goal, Profile, Sex } from "@/lib/types";
+import { MEALS, type Activity, type Goal, type Profile, type Sex } from "@/lib/types";
 import { ACTIVITY_LABELS, calcTargets } from "@/lib/nutrition";
-import { useProfile, useSaveProfile, useSaveWeight } from "@/lib/hooks";
+import { useProfile, useSaveProfile, useSaveSettings, useSaveWeight, useSettings } from "@/lib/hooks";
+import { repos } from "@/lib/repos";
+import { ImportError, parseImport, SCHEMA_VERSION, type ExportFile } from "@/lib/repos/migrations";
 import { todayISO } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
@@ -50,12 +52,17 @@ function Num({ label, value, onChange, step = 1, suffix }: { label: string; valu
   );
 }
 
-const PREFIX = "sysnutri:";
-
 export function ProfilePage() {
   const { data } = useProfile();
   const save = useSaveProfile();
   const saveWeight = useSaveWeight();
+  const { data: settings } = useSettings();
+  const saveSettings = useSaveSettings();
+  const toggleMeal = (id: (typeof MEALS)[number]["id"]) => {
+    const hidden = settings.hiddenMeals.includes(id) ? settings.hiddenMeals.filter((m) => m !== id) : [...settings.hiddenMeals, id];
+    if (hidden.length === MEALS.length) return toast.error("Deja al menos una comida visible");
+    saveSettings.mutate({ ...settings, hiddenMeals: hidden });
+  };
   const [p, setP] = useState<Profile>(data);
   useEffect(() => setP(data), [data]);
   const t = calcTargets(p);
@@ -67,31 +74,31 @@ export function ProfilePage() {
     toast.success("Perfil actualizado");
   };
 
-  const exportData = () => {
-    const out: Record<string, unknown> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k?.startsWith(PREFIX)) out[k] = JSON.parse(localStorage.getItem(k) ?? "null");
+  const exportData = async () => {
+    try {
+      const file: ExportFile = { app: "macro-quest", schema: SCHEMA_VERSION, exportedAt: new Date().toISOString(), data: await repos.data.exportAll() };
+      const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `macro-quest-${todayISO()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {
+      toast.error(`No se pudo exportar: ${e instanceof Error ? e.message : String(e)}`);
     }
-    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `sistema-nutri-${todayISO()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
   };
 
-  const importData = (file: File) => {
-    file.text().then((txt) => {
-      try {
-        const obj = JSON.parse(txt) as Record<string, unknown>;
-        Object.entries(obj).forEach(([k, v]) => k.startsWith(PREFIX) && localStorage.setItem(k, JSON.stringify(v)));
-        toast.success("Datos importados");
-        setTimeout(() => location.reload(), 600);
-      } catch {
-        toast.error("Archivo no válido");
-      }
-    });
+  const importData = async (file: File) => {
+    try {
+      const snapshot = parseImport(JSON.parse(await file.text()));
+      const summary = `${snapshot.diary.length} entradas, ${snapshot.foods.length} alimentos propios, ${snapshot.recipes.length} recetas y ${snapshot.weights.length} pesos`;
+      if (!confirm(`Se sustituirán TODOS los datos de este dispositivo por los del archivo (${summary}). ¿Continuar?`)) return;
+      await repos.data.replaceAll(snapshot);
+      toast.success("Datos importados");
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {
+      toast.error(e instanceof ImportError ? e.message : e instanceof SyntaxError ? "El archivo no es JSON válido" : `No se pudo importar: ${String(e)}`);
+    }
   };
 
   return (
@@ -164,6 +171,26 @@ export function ProfilePage() {
         </div>
       </SystemWindow>
 
+      <SystemWindow title="Comidas visibles" scan={false}>
+        <div className="grid grid-cols-3 gap-2">
+          {MEALS.map((m) => {
+            const on = !settings.hiddenMeals.includes(m.id);
+            return (
+              <button
+                key={m.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleMeal(m.id)}
+                className={cn("min-h-11 border text-xs", on ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground line-through")}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-muted-foreground mt-3 text-[11px]">Las ocultas siguen apareciendo en el diario si tienen algo registrado.</p>
+      </SystemWindow>
+
       <SystemWindow title="Datos" scan={false}>
         <div className="grid grid-cols-2 gap-2">
           <button className="btn-ghost" onClick={exportData}>
@@ -171,7 +198,11 @@ export function ProfilePage() {
           </button>
           <label className="btn-ghost cursor-pointer">
             <Upload className="h-4 w-4" /> Importar
-            <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && importData(e.target.files[0])} />
+            <input type="file" accept="application/json" className="hidden" onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) importData(f);
+            }} />
           </label>
         </div>
         <p className="text-muted-foreground mt-3 text-[11px]">

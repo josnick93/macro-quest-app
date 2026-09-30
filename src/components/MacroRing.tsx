@@ -16,20 +16,20 @@ export function MacroRing({ consumed, target }: { consumed: number; target: numb
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={over ? "var(--destructive)" : "var(--primary)"}
+          stroke={over ? "var(--over)" : "var(--primary)"}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - pct)}
           style={{
             transition: "stroke-dashoffset 900ms cubic-bezier(0.2,0.8,0.2,1)",
-            filter: "drop-shadow(0 0 8px oklch(0.72 0.16 250 / 65%))",
+            filter: `drop-shadow(0 0 8px ${over ? "oklch(0.8 0.14 70 / 55%)" : "oklch(0.72 0.16 250 / 65%)"})`,
           }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <span className="text-muted-foreground font-display text-[11px] tracking-[0.22em] uppercase">
-          {over ? "Exceso" : "Restantes"}
+          {over ? "Por encima" : "Restantes"}
         </span>
         <span className="font-display text-5xl leading-none font-bold tabular-nums">{Math.abs(remaining)}</span>
         <span className="text-muted-foreground mt-1 text-xs">
