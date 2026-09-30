@@ -16,11 +16,14 @@ import { DayNote } from "@/components/DayNote";
 import { QuickAddSheet } from "@/components/QuickAddSheet";
 import { CopyMealSheet } from "@/components/CopyMealSheet";
 import { MealActionsSheet } from "@/components/MealActionsSheet";
+import { SaveMealSheet } from "@/components/SaveMealSheet";
+import { MicroList } from "@/components/MicroList";
 import { defaultMeal, mealLabel } from "@/components/MealSelect";
 import { MEALS, type DiaryEntry, type MealType, type NewEntry } from "@/lib/types";
-import { entryMacros, totalsFor } from "@/lib/nutrition";
+import { entryMacros, microTotals, totalsFor } from "@/lib/nutrition";
 import { currentStreak, dailyQuests } from "@/lib/xp";
 import { copyEntries, quickEntry } from "@/lib/diary";
+import { uid } from "@/lib/repos/local";
 import { addDaysISO, isISODate, relativeDayLabel } from "@/lib/date";
 import {
   useAddEntries,
@@ -29,6 +32,7 @@ import {
   useProfile,
   usePutEntries,
   useRemoveEntries,
+  useSaveSavedMeal,
   useSettings,
   useTargets,
   useToday,
@@ -40,6 +44,7 @@ type Panel =
   | { type: "quick"; meal: MealType }
   | { type: "copy"; meal?: MealType }
   | { type: "actions"; meal: MealType }
+  | { type: "save"; meal: MealType }
   | null;
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -64,6 +69,7 @@ export function TodayPage() {
   const addEntries = useAddEntries();
   const putEntries = usePutEntries();
   const removeEntries = useRemoveEntries();
+  const saveSavedMeal = useSaveSavedMeal();
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
 
@@ -122,6 +128,7 @@ export function TodayPage() {
           <StatBar label="Carbohidratos" value={totals.carbs} target={targets.carbs} color="carbs" />
           <StatBar label="Grasa" value={totals.fat} target={targets.fat} color="fat" />
         </div>
+        <MicroList micros={microTotals(entries)} className="mt-3 justify-center" />
       </SystemWindow>
 
       {!isFuture && (
@@ -250,10 +257,27 @@ export function TodayPage() {
           meal={panel.meal}
           previous={previous.filter((e) => e.meal === panel.meal)}
           previousLabel={prevLabel}
+          current={entries.filter((e) => e.meal === panel.meal)}
+          onSaveMeal={() => setPanel({ type: "save", meal: panel.meal })}
           onClose={() => setPanel(null)}
           onCopyPrevious={() => copyInto(previous.filter((e) => e.meal === panel.meal), panel.meal)}
           onCopyOther={() => setPanel({ type: "copy", meal: panel.meal })}
           onQuickAdd={() => setPanel({ type: "quick", meal: panel.meal })}
+        />
+      )}
+
+      {panel?.type === "save" && (
+        <SaveMealSheet
+          entries={entries.filter((e) => e.meal === panel.meal)}
+          defaultName={`Mi ${mealLabel(panel.meal).toLowerCase()}`}
+          onClose={() => setPanel(null)}
+          onSave={async (name) => {
+            const now = new Date().toISOString();
+            const items = copyEntries(entries.filter((e) => e.meal === panel.meal), date).map(({ date: _d, meal: _m, ...item }) => item);
+            setPanel(null);
+            await saveSavedMeal.mutateAsync({ id: uid(), name, items, createdAt: now, updatedAt: now });
+            toast.success(`«${name}» guardada: la tienes en Añadir → Comidas guardadas`);
+          }}
         />
       )}
     </div>

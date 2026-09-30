@@ -1,4 +1,4 @@
-import { CalendarSearch, CopyPlus, Zap } from "lucide-react";
+import { BookmarkPlus, CalendarSearch, CopyPlus, Zap } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { mealLabel } from "./MealSelect";
 import type { DiaryEntry, MealType } from "@/lib/types";
@@ -9,13 +9,16 @@ interface Props {
   /** Entradas de esa comida el día anterior. */
   previous: DiaryEntry[];
   previousLabel: string;
+  /** Entradas actuales de esa comida (para guardarla como plantilla). */
+  current: DiaryEntry[];
+  onSaveMeal: () => void;
   onCopyPrevious: () => void;
   onCopyOther: () => void;
   onQuickAdd: () => void;
   onClose: () => void;
 }
 
-export function MealActionsSheet({ meal, previous, previousLabel, onCopyPrevious, onCopyOther, onQuickAdd, onClose }: Props) {
+export function MealActionsSheet({ meal, previous, previousLabel, current, onSaveMeal, onCopyPrevious, onCopyOther, onQuickAdd, onClose }: Props) {
   return (
     <Sheet title={mealLabel(meal)} onClose={onClose}>
       <div className="space-y-2">
@@ -31,6 +34,9 @@ export function MealActionsSheet({ meal, previous, previousLabel, onCopyPrevious
         </button>
         <button className="btn-ghost w-full justify-start" onClick={onQuickAdd}>
           <Zap className="h-4 w-4" /> Añadido rápido
+        </button>
+        <button className="btn-ghost w-full justify-start" disabled={current.length === 0} onClick={onSaveMeal}>
+          <BookmarkPlus className="h-4 w-4" /> Guardar como comida guardada
         </button>
       </div>
     </Sheet>

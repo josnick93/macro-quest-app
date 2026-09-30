@@ -1,14 +1,27 @@
-import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, Settings, WeightLog } from "../types";
+import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, WeightLog } from "../types";
 import type { Snapshot } from "./migrations";
 
+/**
+ * Alimentos conocidos: propios, y los de Open Food Facts que se han usado o corregido.
+ * Recientes y frecuentes no se guardan: se derivan del diario (lib/foods.ts).
+ */
 export interface FoodRepository {
-  getRecents(): Promise<Food[]>;
-  addRecent(food: Food): Promise<void>;
-  getFavorites(): Promise<Food[]>;
+  list(): Promise<Food[]>;
+  findByBarcode(barcode: string): Promise<Food | null>;
+  /** Crear o editar (propio, o corrección local de un producto de OFF). */
+  save(food: Food): Promise<void>;
+  /** Guarda un alimento de OFF usado para el historial, sin pisar una versión local existente. */
+  remember(food: Food): Promise<void>;
+  remove(id: string): Promise<void>;
+  /** Ids de favoritos (alimentos o "recipe:<id>"). */
+  getFavorites(): Promise<string[]>;
   toggleFavorite(food: Food): Promise<boolean>;
-  listCustom(): Promise<Food[]>;
-  saveCustom(food: Food): Promise<void>;
-  removeCustom(id: string): Promise<void>;
+}
+
+export interface SavedMealRepository {
+  list(): Promise<SavedMeal[]>;
+  save(meal: SavedMeal): Promise<void>;
+  remove(id: string): Promise<void>;
 }
 
 export interface DiaryRepository {
@@ -55,6 +68,7 @@ export interface Repositories {
   foods: FoodRepository;
   diary: DiaryRepository;
   recipes: RecipeRepository;
+  savedMeals: SavedMealRepository;
   profile: ProfileRepository;
   weights: WeightRepository;
   data: DataRepository;

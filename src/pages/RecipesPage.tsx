@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChefHat, Pencil, Plus, Trash2, Utensils } from "lucide-react";
+import { ChefHat, Copy, Pencil, Plus, Trash2, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { SystemWindow } from "@/components/SystemWindow";
 import { Sheet } from "@/components/Sheet";
-import { FoodPicker, recipeAsFood } from "@/components/FoodPicker";
+import { FoodPicker } from "@/components/FoodPicker";
 import { FoodDetailSheet } from "@/components/FoodDetailSheet";
-import { CustomFoodSheet } from "@/components/CustomFoodSheet";
+import { FoodFormSheet } from "@/components/FoodFormSheet";
 import { MacroLine } from "@/components/MacroLine";
 import { defaultMeal } from "@/components/MealSelect";
 import type { Food, Recipe, RecipeIngredient } from "@/lib/types";
 import { recipePer100g, recipeRawWeight, recipeTotals, scaleMacros } from "@/lib/nutrition";
 import { uid } from "@/lib/repos/local";
 import { todayISO } from "@/lib/date";
-import { useAddEntries, useRecipes, useRemoveRecipe, useSaveCustomFood, useSaveRecipe } from "@/lib/hooks";
+import { recipeAsFood, recipeFoodId } from "@/lib/foods";
+import { useAddEntries, useFoodLibrary, useRecipes, useRememberFood, useRemoveRecipe, useSaveFood, useSaveRecipe } from "@/lib/hooks";
 
 const emptyRecipe = (): Recipe => ({ id: uid(), name: "", ingredients: [], cookedWeight: 0, createdAt: new Date().toISOString() });
 
@@ -22,18 +23,23 @@ function RecipeEditor({ initial, onClose }: { initial: Recipe; onClose: () => vo
   const [cooked, setCooked] = useState(initial.cookedWeight ? String(initial.cookedWeight) : "");
   const [picking, setPicking] = useState(false);
   const [food, setFood] = useState<Food | null>(null);
-  const [custom, setCustom] = useState(false);
+  const [form, setForm] = useState<{ barcode?: string } | null>(null);
+  const [servings, setServings] = useState(initial.servings ? String(initial.servings) : "");
   const save = useSaveRecipe();
-  const saveCustom = useSaveCustomFood();
+  const saveFood = useSaveFood();
+  const remember = useRememberFood();
 
   const raw = recipeRawWeight(r);
   const total = recipeTotals(r);
-  const withCooked = { ...r, cookedWeight: parseFloat(cooked) || 0 };
+  const nServings = parseInt(servings, 10) || 0;
+  const withCooked: Recipe = { ...r, cookedWeight: parseFloat(cooked) || 0, servings: nServings > 0 ? nServings : undefined };
   const per100 = recipePer100g(withCooked);
+  const finalWeight = withCooked.cookedWeight || raw;
 
   const addIng = (grams: number) => {
     if (!food) return;
-    const ing: RecipeIngredient = { id: uid(), name: food.name, grams, per100g: food.per100g };
+    const ing: RecipeIngredient = { id: uid(), name: food.name, grams, per100g: food.per100g, foodId: food.id };
+    if (food.source === "off") remember.mutate(food);
     setR((p) => ({ ...p, ingredients: [...p.ingredients, ing] }));
     setFood(null);
     setPicking(false);
@@ -50,13 +56,14 @@ function RecipeEditor({ initial, onClose }: { initial: Recipe; onClose: () => vo
     onClose();
   };
 
-  if (custom)
+  if (form)
     return (
-      <CustomFoodSheet
-        onClose={() => setCustom(false)}
+      <FoodFormSheet
+        barcode={form.barcode}
+        onClose={() => setForm(null)}
         onSave={async (f) => {
-          await saveCustom.mutateAsync(f);
-          setCustom(false);
+          await saveFood.mutateAsync(f);
+          setForm(null);
           setFood(f);
         }}
       />
@@ -68,7 +75,7 @@ function RecipeEditor({ initial, onClose }: { initial: Recipe; onClose: () => vo
   if (picking)
     return (
       <Sheet title="Ingrediente" onClose={() => setPicking(false)}>
-        <FoodPicker showRecipes={false} onPick={setFood} onCreateCustom={() => setCustom(true)} />
+        <FoodPicker mode="ingredient" onPick={(f) => setFood(f)} onCreateFood={(barcode) => setForm(barcode ? { barcode } : {})} />
       </Sheet>
     );
 
@@ -129,9 +136,27 @@ function RecipeEditor({ initial, onClose }: { initial: Recipe; onClose: () => vo
           <p className="text-muted-foreground mt-1 text-[11px]">Si lo dejas vacío se usa el peso crudo ({Math.round(raw)} g).</p>
         </div>
 
+        <div>
+          <label className="label-sys" htmlFor="servings">Raciones (opcional)</label>
+          <input
+            id="servings"
+            className="field tabular-nums"
+            inputMode="numeric"
+            placeholder="Ej.: 4"
+            value={servings}
+            onChange={(e) => setServings(e.target.value.replace(/\D/g, ""))}
+          />
+        </div>
+
         <div className="border-border space-y-1 border p-3 text-xs">
           <p><span className="label-sys inline">Total</span> <MacroLine m={total} /></p>
           <p><span className="label-sys inline">Por 100 g</span> <MacroLine m={per100} /></p>
+          {nServings > 0 && finalWeight > 0 && (
+            <p>
+              <span className="label-sys inline">Por ración ({Math.round(finalWeight / nServings)} g)</span>{" "}
+              <MacroLine m={scaleMacros(per100, finalWeight / nServings)} />
+            </p>
+          )}
         </div>
 
         <button className="btn-primary w-full" onClick={submit} disabled={save.isPending}>Guardar receta</button>
@@ -144,6 +169,8 @@ export function RecipesPage() {
   const { data: recipes } = useRecipes();
   const remove = useRemoveRecipe();
   const addEntries = useAddEntries();
+  const save = useSaveRecipe();
+  const { stats } = useFoodLibrary();
   const navigate = useNavigate();
   const [editing, setEditing] = useState<Recipe | null>(null);
   const [logging, setLogging] = useState<Recipe | null>(null);
@@ -179,17 +206,35 @@ export function RecipesPage() {
               <div className="min-w-0 flex-1">
                 <h3 className="font-display truncate text-lg font-semibold">{r.name}</h3>
                 <p className="text-muted-foreground text-[11px]">
-                  {r.ingredients.length} ingredientes · {Math.round(weight)} g cocinado
+                  {r.ingredients.length} {r.ingredients.length === 1 ? "ingrediente" : "ingredientes"} · {Math.round(weight)} g cocinado
+                  {r.servings ? ` · ${r.servings} raciones de ${Math.round(weight / r.servings)} g` : ""}
                 </p>
                 <MacroLine m={per100} className="text-xs" />
                 <span className="text-muted-foreground text-[10px]"> / 100 g</span>
               </div>
-              <button aria-label="Editar" className="text-muted-foreground p-2" onClick={() => setEditing(r)}>
+              <button aria-label="Editar" className="text-muted-foreground flex h-11 w-9 items-center justify-center" onClick={() => setEditing(r)}>
                 <Pencil className="h-4 w-4" />
               </button>
               <button
+                aria-label="Duplicar"
+                className="text-muted-foreground flex h-11 w-9 items-center justify-center"
+                onClick={async () => {
+                  const now = new Date().toISOString();
+                  await save.mutateAsync({
+                    ...r,
+                    id: uid(),
+                    name: `${r.name} (copia)`,
+                    ingredients: r.ingredients.map((i) => ({ ...i, id: uid() })),
+                    createdAt: now,
+                  });
+                  toast.success("Receta duplicada");
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+              <button
                 aria-label="Borrar"
-                className="text-muted-foreground hover:text-destructive p-2"
+                className="text-muted-foreground hover:text-destructive flex h-11 w-9 items-center justify-center"
                 onClick={() => {
                   if (confirm(`¿Borrar "${r.name}"?`)) {
                     remove.mutate(r.id);
@@ -213,6 +258,7 @@ export function RecipesPage() {
         <FoodDetailSheet
           food={recipeAsFood(logging)}
           meal={defaultMeal()}
+          lastGrams={stats.lastGrams[recipeFoodId(logging.id)]}
           confirmLabel="Añadir al diario"
           onClose={() => setLogging(null)}
           onConfirm={async (grams, meal) => {
@@ -225,7 +271,7 @@ export function RecipesPage() {
               grams,
               per100g: recipePer100g(logging),
               recipeId: logging.id,
-              foodId: `recipe:${logging.id}`,
+              foodId: recipeFoodId(logging.id),
             }]);
             toast.success(`${logging.name} · ${grams} g añadido`);
             setLogging(null);
