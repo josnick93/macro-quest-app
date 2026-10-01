@@ -30,7 +30,8 @@ src/
   components/   SystemWindow, Sheet, BarcodeScanner (lazy), FoodPicker, MacroRing, XPBar, QuestItem…
   lib/
     types.ts      Modelos (Food, Entry, Recipe, Profile, Weight, Game…)
-    nutrition.ts  Mifflin-St Jeor, TDEE, objetivos, macros de recetas (crudo + peso cocinado → /100 g)
+    nutrition.ts  Basal (Mifflin / Katch-McArdle con % de grasa), gasto, objetivos por día, % grasa (método Marina), macros de recetas
+    goals.ts      Escenarios definición/mantenimiento/volumen, avisos de salud, plazo al peso objetivo, gasto real (TDEE adaptativo)
     xp.ts         Misiones, XP, niveles, rachas
     off.ts        Cliente Open Food Facts (ODbL). La búsqueda da 503 intermitentes y limita ~10/min: reintentos + caché + mínimo 3 letras
     hooks.ts      Hooks React Query sobre los repos
@@ -47,13 +48,16 @@ src/
 - **Cualquier cambio de formato de datos lleva migración** (`SCHEMA_VERSION` + paso en `MIGRATIONS` + `onupgradeneeded` si cambian los stores) y test. Nunca perder datos del usuario.
 - Cada entrada del diario guarda una copia de los macros (`per100g`): editar un alimento no reescribe el pasado.
 - Entidades con `updatedAt` y borrados registrados en `tombstones` (para sync last-write-wins futura).
+- Perfil (esquema v3): ritmo en kg/semana (`rateKgWeek`), medidas y % de grasa opcionales, `tdeeOverride` (gasto medido) y `weekdayKcal` (ajuste por día). Leer siempre con `normalizeProfile`.
+- El pesaje más reciente actualiza `profile.weightKg` (y cambiar el peso en Perfil registra un pesaje).
+- Avisos de salud del plan: informativos y en ámbar, nunca bloquean.
 - Gamificación: nunca quita XP ni castiga comer más; pasarse del objetivo se muestra en ámbar (`--over`), nunca en rojo.
 
 ## Comandos
 - `npm run dev` · `npm run dev -- --host` (probar en el móvil por la red local)
 - `NO_SSL=1 npm run dev` (sin HTTPS; para navegadores que rechazan el certificado autofirmado)
 - `npm run build` (tsc + vite build) · `npm run preview`
-- `npm test` (Vitest; tests de la lógica pura de `lib/`: nutrición, XP, diario, migraciones)
+- `npm test` (Vitest; tests de la lógica pura de `lib/`: nutrición, objetivos, XP, diario, alimentos, migraciones)
 
 ## Notas
 - Escáner: la cámara en directo en iOS requiere HTTPS; por http en la red local funciona el botón "Hacer foto".

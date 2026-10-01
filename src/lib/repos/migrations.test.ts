@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fromLegacy, ImportError, LEGACY_PREFIX, parseImport, SCHEMA_VERSION, type ExportFile } from "./migrations";
+import { fromLegacy, ImportError, LEGACY_PREFIX, normalizeProfile, parseImport, SCHEMA_VERSION, type ExportFile } from "./migrations";
+import { calcTargets, formulaTDEE } from "../nutrition";
 
 const NOW = "2026-09-30T10:00:00.000Z";
 
@@ -137,5 +138,38 @@ describe("v1 → v2", () => {
     );
     expect(s.savedMeals.map((m) => m.id)).toEqual(["m1"]);
     expect(s.savedMeals[0]!.items[0]!.grams).toBe(60);
+  });
+});
+
+describe("v2 → v3", () => {
+  const v2 = { sex: "hombre", age: 33, heightCm: 180, weightKg: 81, activity: "moderado", goal: "perder", adjustPct: 15, proteinPerKg: 2, fatPct: 25 };
+
+  it("el % de déficit pasa a kg/semana conservando las kcal objetivo", () => {
+    const p = normalizeProfile(v2);
+    expect(p).not.toHaveProperty("adjustPct");
+    expect(p.rateKgWeek).toBeGreaterThan(0);
+    const before = formulaTDEE(p) * 0.85;
+    expect(Math.abs(calcTargets(p).kcal - before)).toBeLessThan(8);
+  });
+
+  it("importar una copia v2 migra el perfil y no toca el resto", () => {
+    const s = parseImport({ app: "macro-quest", schema: 2, data: { profile: v2, weights: [{ date: "2026-09-29", kg: 81 }] } }, NOW);
+    expect(s.profile.rateKgWeek).toBe(normalizeProfile(v2).rateKgWeek);
+    expect(s.profile.heightCm).toBe(180);
+    expect(s.weights).toHaveLength(1);
+  });
+
+  it("un perfil v3 se conserva tal cual, con sus campos opcionales", () => {
+    const v3 = { ...normalizeProfile(v2), rateKgWeek: 0.25, bodyFatPct: 18, neckCm: 38, waistCm: 86, targetWeightKg: 76, tdeeOverride: 2800, weekdayKcal: [0, 0, 0, 0, 0, 200, 0] };
+    expect(normalizeProfile(JSON.parse(JSON.stringify(v3)))).toEqual(v3);
+  });
+
+  it("descarta opcionales inválidos sin perder el perfil", () => {
+    const p = normalizeProfile({ ...v2, bodyFatPct: -3, waistCm: "ancha", weekdayKcal: [1, 2], tdeeOverride: 0 });
+    expect(p.bodyFatPct).toBeUndefined();
+    expect(p.waistCm).toBeUndefined();
+    expect(p.weekdayKcal).toBeUndefined();
+    expect(p.tdeeOverride).toBeUndefined();
+    expect(p.weightKg).toBe(81);
   });
 });

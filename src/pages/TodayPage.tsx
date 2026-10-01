@@ -59,7 +59,7 @@ export function TodayPage() {
   const prevDate = addDaysISO(date, -1);
   const prevLabel = date === today ? "de ayer" : "del día anterior";
 
-  const targets = useTargets();
+  const targets = useTargets(date);
   const profileQ = useProfile();
   const dayQ = useDay(date);
   const entries = dayQ.data;

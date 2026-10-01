@@ -1,5 +1,6 @@
 import type { Activity, DiaryEntry, Macros, Nutrients, Profile, Recipe, Targets } from "./types";
 import { MICROS } from "./types";
+import { weekdayIndex } from "./date";
 
 export const ACTIVITY_FACTORS: Record<Activity, number> = {
   sedentario: 1.2,
@@ -45,17 +46,59 @@ type Portion = Pick<DiaryEntry, "per100g" | "grams">;
 export const entryMacros = (e: Portion): Macros => scaleMacros(e.per100g, e.grams);
 export const totalsFor = (entries: Portion[]): Macros => sumMacros(entries.map(entryMacros));
 
-/** Mifflin-St Jeor */
+/** Energía aproximada de 1 kg de peso corporal. */
+export const KCAL_PER_KG = 7700;
+
+/**
+ * % de grasa por el método de la Marina de EE. UU. (medidas en cm; cadera solo en mujeres).
+ * null si faltan medidas o el resultado no es creíble.
+ */
+export function navyBodyFat(p: Pick<Profile, "sex" | "heightCm" | "neckCm" | "waistCm" | "hipCm">): number | null {
+  const { neckCm: neck, waistCm: waist, hipCm: hip, heightCm: h } = p;
+  if (!neck || !waist || !(h > 0)) return null;
+  if (p.sex === "mujer" && !hip) return null;
+  const girth = p.sex === "hombre" ? waist - neck : waist + hip! - neck;
+  if (girth <= 0) return null;
+  const density =
+    p.sex === "hombre"
+      ? 1.0324 - 0.19077 * Math.log10(girth) + 0.15456 * Math.log10(h)
+      : 1.29579 - 0.35004 * Math.log10(girth) + 0.221 * Math.log10(h);
+  const bf = 495 / density - 450;
+  return bf >= 3 && bf <= 60 ? round1(bf) : null;
+}
+
+/** Masa magra en kg, si hay un % de grasa válido. */
+export function leanMassKg(p: Pick<Profile, "weightKg" | "bodyFatPct">): number | null {
+  const bf = p.bodyFatPct;
+  return bf !== undefined && bf >= 3 && bf <= 60 ? p.weightKg * (1 - bf / 100) : null;
+}
+
+/** Katch-McArdle si se conoce la masa magra; si no, Mifflin-St Jeor. */
 export function calcBMR(p: Profile): number {
+  const lean = leanMassKg(p);
+  if (lean !== null) return 370 + 21.6 * lean;
   const base = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age;
   return p.sex === "hombre" ? base + 5 : base - 161;
 }
 
-export function calcTargets(p: Profile): Targets {
-  const bmr = calcBMR(p);
-  const tdee = bmr * ACTIVITY_FACTORS[p.activity];
+/** Gasto diario según la fórmula (basal × actividad). */
+export const formulaTDEE = (p: Profile): number => calcBMR(p) * ACTIVITY_FACTORS[p.activity];
+
+/** Gasto diario: el medido si el usuario lo ha aplicado; si no, el de la fórmula. */
+export const calcTDEE = (p: Profile): number => (p.tdeeOverride && p.tdeeOverride > 0 ? p.tdeeOverride : formulaTDEE(p));
+
+/** Déficit (negativo) o superávit diario en kcal que corresponde al ritmo elegido. */
+export function goalDeltaKcal(p: Pick<Profile, "goal" | "rateKgWeek">): number {
   const sign = p.goal === "perder" ? -1 : p.goal === "ganar" ? 1 : 0;
-  const kcal = tdee * (1 + (sign * p.adjustPct) / 100);
+  return (sign * p.rateKgWeek * KCAL_PER_KG) / 7;
+}
+
+/** Objetivos del día. Con `date` se aplica el ajuste de ese día de la semana. */
+export function calcTargets(p: Profile, date?: string): Targets {
+  const bmr = calcBMR(p);
+  const tdee = calcTDEE(p);
+  const extra = date ? (p.weekdayKcal?.[weekdayIndex(date)] ?? 0) : 0;
+  const kcal = Math.max(0, tdee + goalDeltaKcal(p) + extra);
   const protein = p.proteinPerKg * p.weightKg;
   const fat = (kcal * (p.fatPct / 100)) / 9;
   const carbs = Math.max(0, (kcal - protein * 4 - fat * 9) / 4);

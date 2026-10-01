@@ -5,6 +5,7 @@ import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS } from "./repos/local";
 import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, Targets, WeightLog } from "./types";
 import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
 import { calcTargets, totalsFor } from "./nutrition";
+import { estimateTdee, kcalByDay, TDEE_WINDOW_DAYS, type TdeeEstimate } from "./goals";
 import { dailyQuests, syncDayXp } from "./xp";
 import { addDaysISO, msUntilMidnight, todayISO } from "./date";
 
@@ -30,9 +31,10 @@ export function useToday(): string {
 export function useProfile() {
   return useQuery({ queryKey: ["profile"], queryFn: () => repos.profile.getProfile(), initialData: DEFAULT_PROFILE, ...opts });
 }
-export function useTargets() {
+/** Objetivos del perfil; con `date`, incluye el ajuste de ese día de la semana. */
+export function useTargets(date?: string) {
   const { data } = useProfile();
-  return calcTargets(data);
+  return calcTargets(data, date);
 }
 export function useSaveProfile() {
   const qc = useQueryClient();
@@ -194,6 +196,16 @@ export function useSaveWeight() {
 export function useRemoveWeight() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (d: string) => repos.weights.remove(d), onSuccess: () => qc.invalidateQueries({ queryKey: ["weights"] }) });
+}
+
+/** Gasto real estimado con los últimos 28 días completos (hoy no cuenta: aún no ha terminado). */
+export function useTdeeEstimate(): TdeeEstimate {
+  const today = useToday();
+  const from = addDaysISO(today, -TDEE_WINDOW_DAYS);
+  const to = addDaysISO(today, -1);
+  const { data: entries } = useDiaryRange(from, to);
+  const { data: weights } = useWeights();
+  return useMemo(() => estimateTdee(kcalByDay(entries), weights.filter((w) => w.date >= from && w.date <= today)), [entries, weights, from, today]);
 }
 
 export function useGame() {
