@@ -69,7 +69,7 @@ export function WelcomePage() {
         </p>
         <h1 className="font-display text-2xl font-bold">{step === 0 ? "Bienvenido a Macro Quest" : STEPS[step]}</h1>
         <p className="text-muted-foreground text-xs">
-          {step === 0 && "Con estos datos se calcula cuánto gastas al día. Se guardan solo en tu dispositivo."}
+          {step === 0 && "Con estos datos se calcula cuánto gastas al día."}
           {step === 1 && "Elige qué quieres conseguir. Son calorías al día; podrás cambiarlo cuando quieras."}
           {step === 2 && "Este es tu objetivo diario. El diario te dirá cuánto te queda en cada momento."}
         </p>

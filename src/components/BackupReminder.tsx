@@ -2,16 +2,17 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { backupDue, daysSince, lastBackup, lastNag, markNag } from "@/lib/backup";
-import { useGame } from "@/lib/hooks";
+import { useAccount, useGame } from "@/lib/hooks";
 
-/** Mientras los datos vivan solo en el dispositivo, recuerda exportar una copia de vez en cuando. */
+/** Sin cuenta los datos viven solo en el dispositivo: recuerda exportar una copia de vez en cuando. Con cuenta ya hay copia en la nube. */
 export function BackupReminder() {
   const { data: game, isFetched } = useGame();
   const navigate = useNavigate();
+  const account = useAccount();
   const activeDays = game.activeDays.length;
 
   useEffect(() => {
-    if (!isFetched) return;
+    if (!isFetched || account) return;
     const now = Date.now();
     const last = lastBackup();
     if (!backupDue(last, lastNag(), activeDays, now)) return;
@@ -22,7 +23,7 @@ export function BackupReminder() {
       duration: 10_000,
       action: { label: "Exportar", onClick: () => navigate("/perfil#datos") },
     });
-  }, [isFetched, activeDays, navigate]);
+  }, [isFetched, activeDays, navigate, account]);
 
   return null;
 }

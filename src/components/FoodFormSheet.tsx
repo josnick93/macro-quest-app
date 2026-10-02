@@ -104,7 +104,7 @@ export function FoodFormSheet({ food, barcode, onSave, onDelete, onClose }: Prop
       >
         {isOff && (
           <p className="text-muted-foreground border-border border p-2 text-[11px]">
-            Producto de Open Food Facts. Tus cambios se guardan solo en tu dispositivo y se usarán en lugar de los datos originales.
+            Producto de Open Food Facts. Tus cambios son solo para ti y se usarán en lugar de los datos originales.
           </p>
         )}
         <div>

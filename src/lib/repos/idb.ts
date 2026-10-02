@@ -3,15 +3,22 @@ import { fromLegacy, LEGACY_PREFIX, normalizeProfile, normalizeSnapshot, SCHEMA_
 /** Envoltorio mínimo de IndexedDB (sin dependencias). */
 
 export const DB_NAME = "macro-quest";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
-export type StoreName = "diary" | "notes" | "foods" | "recipes" | "savedMeals" | "weights" | "kv" | "tombstones";
-export const DATA_STORES: StoreName[] = ["diary", "notes", "foods", "recipes", "savedMeals", "weights", "kv", "tombstones"];
+export type StoreName = "diary" | "notes" | "foods" | "recipes" | "savedMeals" | "weights" | "kv" | "tombstones" | "outbox";
+export const DATA_STORES: StoreName[] = ["diary", "notes", "foods", "recipes", "savedMeals", "weights", "kv", "tombstones", "outbox"];
 
-/** Borrados registrados para la futura sincronización (last-write-wins). */
+/** Borrados registrados para la sincronización (gana el último cambio). */
 export interface Tombstone {
   key: string;
   deletedAt: string;
+}
+
+/** Cambio local pendiente de subir a la nube. `mark` cambia si el registro se vuelve a tocar mientras se sube. */
+export interface OutboxItem {
+  /** "almacén:clave", igual que en `tombstones`. */
+  key: string;
+  mark: string;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -90,6 +97,7 @@ export function openDb(): Promise<IDBDatabase> {
         db.createObjectStore("weights", { keyPath: "date" });
         db.createObjectStore("kv");
         db.createObjectStore("tombstones", { keyPath: "key" });
+        db.createObjectStore("outbox", { keyPath: "key" });
         // Migración desde localStorage. Si falla, la transacción se aborta y localStorage queda intacto.
         // Las claves antiguas se conservan como copia de seguridad.
         const legacy = readLegacy();
@@ -121,7 +129,9 @@ export function openDb(): Promise<IDBDatabase> {
           kv.put(SCHEMA_VERSION, "schema");
         };
       }
-      // Futuras versiones: if (ev.oldVersion === 3) { ... }
+      // v3 → v4: cola de cambios pendientes de subir. Los datos no cambian de forma (el esquema sigue en 3).
+      if (ev.oldVersion >= 1 && ev.oldVersion < 4) db.createObjectStore("outbox", { keyPath: "key" });
+      // Futuras versiones: if (ev.oldVersion === 4) { ... }
     };
     open.onsuccess = () => {
       const db = open.result;
@@ -173,12 +183,41 @@ export async function run<T>(
   return result;
 }
 
-export function tombstone(tx: IDBTransaction, store: StoreName, id: string, now: string) {
-  tx.objectStore("tombstones").put({ key: `${store}:${id}`, deletedAt: now } satisfies Tombstone);
+let dirtyListener: (() => void) | null = null;
+let marks = 0;
+
+/** Avisa cada vez que hay un cambio local pendiente de subir. */
+export function onDirty(listener: (() => void) | null) {
+  dirtyListener = listener;
 }
 
+/** Apunta un registro como pendiente de subir. La transacción debe incluir `outbox`. */
+export function markDirty(tx: IDBTransaction, store: StoreName, id: string) {
+  tx.objectStore("outbox").put({ key: `${store}:${id}`, mark: `${Date.now()}-${++marks}` } satisfies OutboxItem);
+  dirtyListener?.();
+}
+
+/** Registra un borrado. La transacción debe incluir `tombstones` y `outbox`. */
+export function tombstone(tx: IDBTransaction, store: StoreName, id: string, now: string) {
+  tx.objectStore("tombstones").put({ key: `${store}:${id}`, deletedAt: now } satisfies Tombstone);
+  markDirty(tx, store, id);
+}
+
+/** Registra que algo se ha guardado (deja de estar borrado). La transacción debe incluir `tombstones` y `outbox`. */
 export function untombstone(tx: IDBTransaction, store: StoreName, id: string) {
   tx.objectStore("tombstones").delete(`${store}:${id}`);
+  markDirty(tx, store, id);
+}
+
+/** Marca de tiempo de una clave de `kv` (perfil, ajustes…), que no la lleva dentro. */
+export const kvStampKey = (key: string) => `stamp:${key}`;
+
+/** Guarda un dato de usuario en `kv` con su marca de tiempo. La transacción debe incluir `kv` y `outbox`. */
+export function putKv(tx: IDBTransaction, key: string, value: unknown, now: string) {
+  const kv = tx.objectStore("kv");
+  kv.put(value, key);
+  kv.put(now, kvStampKey(key));
+  markDirty(tx, "kv", key);
 }
 
 /** Pide al navegador que no borre los datos por falta de espacio (iOS/Safari los purga si no). */

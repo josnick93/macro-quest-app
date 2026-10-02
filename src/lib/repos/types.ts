@@ -1,5 +1,6 @@
 import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, WeightLog } from "../types";
 import type { Snapshot } from "./migrations";
+import type { SessionUser } from "../auth";
 
 /**
  * Alimentos conocidos: propios, y los de Open Food Facts que se han usado o corregido.
@@ -66,6 +67,33 @@ export interface DataRepository {
   replaceAll(snapshot: Snapshot): Promise<void>;
 }
 
+/** De qué cuenta son los datos de este dispositivo. */
+export interface SyncOwner {
+  userId: string;
+  email: string;
+  /** Ya se ha completado al menos una sincronización con el servidor. */
+  synced: boolean;
+}
+
+export interface SyncResult {
+  pushed: number;
+  /** Cambios de otros dispositivos aplicados aquí. */
+  pulled: number;
+}
+
+/** Copia en la nube: sube los cambios locales y aplica los de otros dispositivos. */
+export interface SyncRepository {
+  /** null si los datos de este dispositivo aún no son de ninguna cuenta. */
+  owner(): Promise<SyncOwner | null>;
+  /** Cambios locales pendientes de subir. */
+  pending(): Promise<number>;
+  run(user: SessionUser): Promise<SyncResult>;
+  /** Tras borrar la cuenta: olvida la copia del servidor. Los datos locales se quedan. */
+  forget(): Promise<void>;
+  /** Borra todos los datos de este dispositivo (para usarlo con otra cuenta). */
+  wipe(): Promise<void>;
+}
+
 export interface Repositories {
   foods: FoodRepository;
   diary: DiaryRepository;
@@ -74,4 +102,5 @@ export interface Repositories {
   profile: ProfileRepository;
   weights: WeightRepository;
   data: DataRepository;
+  sync: SyncRepository;
 }

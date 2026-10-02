@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { fromLegacy, ImportError, LEGACY_PREFIX, normalizeProfile, parseImport, SCHEMA_VERSION, type ExportFile } from "./migrations";
+import {
+  fromLegacy,
+  ImportError,
+  LEGACY_PREFIX,
+  normalizeFavorites,
+  normalizeGame,
+  normalizeProfile,
+  normalizeRecord,
+  normalizeSettings,
+  parseImport,
+  SCHEMA_VERSION,
+  type ExportFile,
+} from "./migrations";
 import { calcTargets, formulaTDEE } from "../nutrition";
 
 const NOW = "2026-09-30T10:00:00.000Z";
@@ -171,5 +183,35 @@ describe("v2 → v3", () => {
     expect(p.weekdayKcal).toBeUndefined();
     expect(p.tdeeOverride).toBeUndefined();
     expect(p.weightKg).toBe(81);
+  });
+});
+
+describe("registros llegados de la sincronización", () => {
+  const per100g = { kcal: 100, protein: 10, carbs: 5, fat: 2 };
+  it("valida cada tipo y devuelve su clave", () => {
+    const e = normalizeRecord("diary", { id: "a", date: "2026-10-02", meal: "cena", kind: "food", name: "Arroz", grams: 80, per100g, createdAt: NOW, updatedAt: NOW });
+    expect(e).toMatchObject({ key: "a", value: { name: "Arroz", meal: "cena" } });
+    expect(normalizeRecord("weights", { date: "2026-10-02", kg: 80.5, updatedAt: NOW })).toEqual({ key: "2026-10-02", value: { date: "2026-10-02", kg: 80.5, updatedAt: NOW } });
+    expect(normalizeRecord("notes", { date: "2026-10-02", text: "bien", updatedAt: NOW })?.key).toBe("2026-10-02");
+    expect(normalizeRecord("foods", { id: "custom:1", name: "Pan", per100g, source: "custom" })?.key).toBe("custom:1");
+    expect(normalizeRecord("recipes", { id: "r1", name: "Guiso", ingredients: [], cookedWeight: 500 })?.key).toBe("r1");
+    expect(normalizeRecord("savedMeals", { id: "m1", name: "Desayuno", items: [{ name: "Avena", grams: 60, per100g }] })?.key).toBe("m1");
+  });
+  it("una entrada sin fecha de creación usa la de su última edición, para no quedar sin orden", () => {
+    const e = normalizeRecord("diary", { id: "a", date: "2026-10-02", meal: "cena", name: "Arroz", grams: 80, per100g, updatedAt: NOW });
+    expect(e?.value).toMatchObject({ createdAt: NOW, kind: "food" });
+  });
+  it("descarta lo corrupto en vez de guardarlo", () => {
+    expect(normalizeRecord("diary", { id: "a", date: "mal", name: "x", grams: 1, per100g })).toBeNull();
+    expect(normalizeRecord("diary", { id: "a", date: "2026-10-02", name: "x", grams: 0, per100g })).toBeNull();
+    expect(normalizeRecord("weights", { date: "2026-10-02", kg: -3 })).toBeNull();
+    expect(normalizeRecord("foods", { id: "recipe:r1", name: "Guiso", per100g, source: "recipe" })).toBeNull();
+    expect(normalizeRecord("savedMeals", { id: "m1", name: "Vacía", items: [] })).toBeNull();
+    expect(normalizeRecord("recipes", "texto")).toBeNull();
+  });
+  it("ajustes, favoritos y juego se validan igual", () => {
+    expect(normalizeSettings({ hiddenMeals: ["cena", "inventada"] })).toEqual({ hiddenMeals: ["cena"] });
+    expect(normalizeFavorites(["a", "a", 3, "", "b"])).toEqual(["a", "b"]);
+    expect(normalizeGame({ xp: -5, awarded: ["k", 1], activeDays: ["2026-10-02", "mal"] })).toEqual({ xp: 0, activeDays: ["2026-10-02"], awarded: ["k"], history: [] });
   });
 });

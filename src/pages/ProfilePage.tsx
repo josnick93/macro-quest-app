@@ -8,7 +8,7 @@ import { fmt, Num, ScenarioCard, Seg, signed } from "@/components/ProfileControl
 import { MEALS, type Activity, type Profile, type Sex } from "@/lib/types";
 import { ACTIVITY_LABELS, calcTargets, formulaTDEE, goalDeltaKcal, leanMassKg, navyBodyFat } from "@/lib/nutrition";
 import { scenarios, targetWarnings, TDEE_MIN_DAYS, TDEE_MIN_WEIGHINS, TDEE_WINDOW_DAYS, weeksToTarget } from "@/lib/goals";
-import { useProfile, useSaveProfile, useSaveSettings, useSaveWeight, useSettings, useTdeeEstimate } from "@/lib/hooks";
+import { useAccount, useProfile, useSaveProfile, useSaveSettings, useSaveWeight, useSettings, useTdeeEstimate } from "@/lib/hooks";
 import { repos } from "@/lib/repos";
 import { ImportError, parseImport, SCHEMA_VERSION, type ExportFile } from "@/lib/repos/migrations";
 import { addDaysISO, todayISO } from "@/lib/date";
@@ -21,6 +21,7 @@ const WEEKDAY_LIMIT = 1500;
 
 export function ProfilePage() {
   const { data } = useProfile();
+  const account = useAccount();
   const save = useSaveProfile();
   const saveWeight = useSaveWeight();
   const { data: settings } = useSettings();
@@ -86,7 +87,8 @@ export function ProfilePage() {
     try {
       const snapshot = parseImport(JSON.parse(await file.text()));
       const summary = `${snapshot.diary.length} entradas, ${snapshot.foods.length} alimentos propios, ${snapshot.recipes.length} recetas y ${snapshot.weights.length} pesos`;
-      if (!confirm(`Se sustituirán TODOS los datos de este dispositivo por los del archivo (${summary}). ¿Continuar?`)) return;
+      const where = account ? "de tu cuenta, en todos tus dispositivos," : "de este dispositivo";
+      if (!confirm(`Se sustituirán TODOS los datos ${where} por los del archivo (${summary}). ¿Continuar?`)) return;
       await repos.data.replaceAll(snapshot);
       toast.success("Datos importados");
       setTimeout(() => location.reload(), 600);
@@ -321,7 +323,9 @@ export function ProfilePage() {
           </label>
         </div>
         <p className="text-muted-foreground mt-3 text-[11px]">
-          Tus datos se guardan solo en este dispositivo. Exporta de vez en cuando como copia de seguridad.{" "}
+          {account
+            ? "Tus datos se guardan en la nube con tu cuenta. Puedes exportar además una copia propia."
+            : "Tus datos se guardan solo en este dispositivo. Exporta de vez en cuando como copia de seguridad."}{" "}
           <span className={backupDays === null || backupDays >= BACKUP_EVERY_DAYS ? "text-over" : ""}>
             {backupDays === null ? "Aún no has exportado ninguna copia." : backupDays === 0 ? "Última copia: hoy." : `Última copia: hace ${backupDays} ${backupDays === 1 ? "día" : "días"}.`}
           </span>

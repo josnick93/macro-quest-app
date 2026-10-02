@@ -9,7 +9,9 @@ import type {
   SavedMealRepository,
   WeightRepository,
 } from "./types";
-import { DATA_STORES, req, run, tombstone, untombstone, writeSnapshot, type StoreName } from "./idb";
+import { DATA_STORES, kvStampKey, markDirty, putKv, req, run, tombstone, untombstone, writeSnapshot, type StoreName, type Tombstone } from "./idb";
+import { createSyncRepository, SYNC_META_KEY, type SyncMeta } from "./sync";
+import { SYNC_KV_KEYS } from "../syncApi";
 import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS, normalizeProfile, type Snapshot } from "./migrations";
 
 export { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS };
@@ -26,7 +28,7 @@ const getAll = <T>(store: StoreName) => run([store], "readonly", (tx) => req(tx.
 const getKv = <T>(key: string, fallback: T) =>
   run(["kv"], "readonly", async (tx) => ((await req(tx.objectStore("kv").get(key))) as T | undefined) ?? fallback);
 
-const setKv = (key: string, value: unknown) => run(["kv"], "readwrite", (tx) => void tx.objectStore("kv").put(value, key));
+const setKv = (key: string, value: unknown) => run(["kv", "outbox"], "readwrite", (tx) => putKv(tx, key, value, nowISO()));
 
 const byCreatedAt = (a: DiaryEntry, b: DiaryEntry) => a.createdAt.localeCompare(b.createdAt);
 
@@ -44,14 +46,14 @@ class IdbFoodRepository implements FoodRepository {
   save(food: Food) {
     if (food.source === "recipe") return Promise.resolve();
     const saved: Food = { ...food, updatedAt: nowISO() };
-    return run(["foods", "tombstones"], "readwrite", (tx) => {
+    return run(["foods", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("foods").put(saved);
       untombstone(tx, "foods", saved.id);
     });
   }
   remember(food: Food) {
     if (food.source === "recipe") return Promise.resolve();
-    return run(["foods", "tombstones"], "readwrite", async (tx) => {
+    return run(["foods", "tombstones", "outbox"], "readwrite", async (tx) => {
       const os = tx.objectStore("foods");
       const existing = (await req(os.get(food.id))) as Food | undefined;
       if (existing) return; // nunca pisar una versión local (propia o corregida)
@@ -60,23 +62,23 @@ class IdbFoodRepository implements FoodRepository {
     });
   }
   remove(id: string) {
-    return run(["foods", "kv", "tombstones"], "readwrite", async (tx) => {
+    return run(["foods", "kv", "tombstones", "outbox"], "readwrite", async (tx) => {
       tx.objectStore("foods").delete(id);
       tombstone(tx, "foods", id, nowISO());
       const kv = tx.objectStore("kv");
       const favs = ((await req(kv.get("favorites"))) as string[] | undefined) ?? [];
-      kv.put(favs.filter((f) => f !== id), "favorites");
+      if (favs.includes(id)) putKv(tx, "favorites", favs.filter((f) => f !== id), nowISO());
     });
   }
   getFavorites() {
     return getKv<string[]>("favorites", []);
   }
   toggleFavorite(food: Food) {
-    return run(["foods", "kv", "tombstones"], "readwrite", async (tx) => {
+    return run(["foods", "kv", "tombstones", "outbox"], "readwrite", async (tx) => {
       const kv = tx.objectStore("kv");
       const list = ((await req(kv.get("favorites"))) as string[] | undefined) ?? [];
       const exists = list.includes(food.id);
-      kv.put(exists ? list.filter((id) => id !== food.id) : [food.id, ...list], "favorites");
+      putKv(tx, "favorites", exists ? list.filter((id) => id !== food.id) : [food.id, ...list], nowISO());
       if (!exists && food.source !== "recipe") {
         const os = tx.objectStore("foods");
         if (!(await req(os.get(food.id)))) {
@@ -95,13 +97,13 @@ class IdbSavedMealRepository implements SavedMealRepository {
     return list.sort((a, b) => a.name.localeCompare(b.name, "es"));
   }
   save(meal: SavedMeal) {
-    return run(["savedMeals", "tombstones"], "readwrite", (tx) => {
+    return run(["savedMeals", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("savedMeals").put({ ...meal, updatedAt: nowISO() });
       untombstone(tx, "savedMeals", meal.id);
     });
   }
   remove(id: string) {
-    return run(["savedMeals", "tombstones"], "readwrite", (tx) => {
+    return run(["savedMeals", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("savedMeals").delete(id);
       tombstone(tx, "savedMeals", id, nowISO());
     });
@@ -128,15 +130,18 @@ class IdbDiaryRepository implements DiaryRepository {
       const ts = new Date(base + i).toISOString();
       return { ...e, id: uid(), createdAt: ts, updatedAt: ts };
     });
-    return run(["diary"], "readwrite", (tx) => {
+    return run(["diary", "outbox"], "readwrite", (tx) => {
       const os = tx.objectStore("diary");
-      for (const e of full) os.put(e);
+      for (const e of full) {
+        os.put(e);
+        markDirty(tx, "diary", e.id);
+      }
       return full;
     });
   }
   put(entries: DiaryEntry[]) {
     const now = nowISO();
-    return run(["diary", "tombstones"], "readwrite", (tx) => {
+    return run(["diary", "tombstones", "outbox"], "readwrite", (tx) => {
       for (const e of entries) {
         tx.objectStore("diary").put({ ...e, updatedAt: now });
         untombstone(tx, "diary", e.id);
@@ -145,7 +150,7 @@ class IdbDiaryRepository implements DiaryRepository {
   }
   remove(ids: string[]) {
     const now = nowISO();
-    return run(["diary", "tombstones"], "readwrite", (tx) => {
+    return run(["diary", "tombstones", "outbox"], "readwrite", (tx) => {
       for (const id of ids) {
         tx.objectStore("diary").delete(id);
         tombstone(tx, "diary", id, now);
@@ -157,7 +162,7 @@ class IdbDiaryRepository implements DiaryRepository {
   }
   saveNote(date: string, text: string) {
     const now = nowISO();
-    return run(["notes", "tombstones"], "readwrite", (tx) => {
+    return run(["notes", "tombstones", "outbox"], "readwrite", (tx) => {
       if (text.trim()) {
         tx.objectStore("notes").put({ date, text, updatedAt: now } satisfies DayNote);
         untombstone(tx, "notes", date);
@@ -178,13 +183,13 @@ class IdbRecipeRepository implements RecipeRepository {
     return (await run(["recipes"], "readonly", (tx) => req(tx.objectStore("recipes").get(id) as IDBRequest<Recipe | undefined>))) ?? null;
   }
   save(recipe: Recipe) {
-    return run(["recipes", "tombstones"], "readwrite", (tx) => {
+    return run(["recipes", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("recipes").put({ ...recipe, updatedAt: nowISO() });
       untombstone(tx, "recipes", recipe.id);
     });
   }
   remove(id: string) {
-    return run(["recipes", "tombstones"], "readwrite", (tx) => {
+    return run(["recipes", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("recipes").delete(id);
       tombstone(tx, "recipes", id, nowISO());
     });
@@ -220,13 +225,13 @@ class IdbWeightRepository implements WeightRepository {
     return getAll<WeightLog>("weights"); // ordenado por fecha (clave primaria)
   }
   save(log: WeightLog) {
-    return run(["weights", "tombstones"], "readwrite", (tx) => {
+    return run(["weights", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("weights").put({ ...log, updatedAt: nowISO() });
       untombstone(tx, "weights", log.date);
     });
   }
   remove(date: string) {
-    return run(["weights", "tombstones"], "readwrite", (tx) => {
+    return run(["weights", "tombstones", "outbox"], "readwrite", (tx) => {
       tx.objectStore("weights").delete(date);
       tombstone(tx, "weights", date, nowISO());
     });
@@ -264,13 +269,47 @@ class IdbDataRepository implements DataRepository {
       };
     });
   }
+  /**
+   * Para la sincronización, importar es un cambio de ahora: todo lo importado se fecha en este momento,
+   * lo que había y no viene en la copia queda como borrado, y se sube entero. Así la copia manda en todos los dispositivos.
+   */
   replaceAll(snapshot: Snapshot) {
-    return run(DATA_STORES, "readwrite", (tx) => {
+    const now = nowISO();
+    const fresh = <T extends object>(items: T[]) => items.map((it) => ({ ...it, updatedAt: now }));
+    const data: Snapshot = {
+      ...snapshot,
+      diary: fresh(snapshot.diary),
+      notes: fresh(snapshot.notes),
+      foods: fresh(snapshot.foods),
+      recipes: fresh(snapshot.recipes),
+      savedMeals: fresh(snapshot.savedMeals),
+      weights: fresh(snapshot.weights),
+    };
+    const incoming = new Set<string>();
+    for (const s of RECORD_STORES) for (const it of data[s]) incoming.add(`${s}:${keyOf(s, it)}`);
+
+    return run(DATA_STORES, "readwrite", async (tx) => {
+      const kv = tx.objectStore("kv");
+      const meta = (await req(kv.get(SYNC_META_KEY))) as SyncMeta | undefined;
+      const tombs = (await req(tx.objectStore("tombstones").getAll())) as Tombstone[];
+      const before: string[] = [];
+      for (const s of RECORD_STORES) for (const k of await req(tx.objectStore(s).getAllKeys())) before.push(`${s}:${String(k)}`);
+
       for (const s of DATA_STORES) tx.objectStore(s).clear();
-      writeSnapshot(tx, snapshot);
+      writeSnapshot(tx, data);
+      for (const k of SYNC_KV_KEYS) kv.put(now, kvStampKey(k));
+      const tombstones = tx.objectStore("tombstones");
+      for (const t of tombs) if (!incoming.has(t.key)) tombstones.put(t);
+      for (const key of before) if (!incoming.has(key)) tombstones.put({ key, deletedAt: now } satisfies Tombstone);
+      // Se conserva de quién son los datos y hasta dónde se había bajado; `full` hace que se suba todo.
+      if (meta) kv.put({ ...meta, full: true } satisfies SyncMeta, SYNC_META_KEY);
     });
   }
 }
+
+const RECORD_STORES = ["diary", "notes", "foods", "recipes", "savedMeals", "weights"] as const;
+const keyOf = (store: (typeof RECORD_STORES)[number], item: object): string =>
+  String((item as Record<string, unknown>)[store === "notes" || store === "weights" ? "date" : "id"]);
 
 export const createLocalRepositories = (): Repositories => ({
   foods: new IdbFoodRepository(),
@@ -280,4 +319,5 @@ export const createLocalRepositories = (): Repositories => ({
   profile: new IdbProfileRepository(),
   weights: new IdbWeightRepository(),
   data: new IdbDataRepository(),
+  sync: createSyncRepository(),
 });

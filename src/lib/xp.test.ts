@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { currentStreak, dailyQuests, levelFromXp, syncDayXp, xpForLevel } from "./xp";
+import { awardXp, currentStreak, dailyQuests, levelFromXp, MAX_AWARDED, mergeGame, syncDayXp, xpForLevel } from "./xp";
+import type { GameState } from "./types";
 import { DEFAULT_GAME } from "./repos/migrations";
 import type { DiaryEntry, Targets } from "./types";
 
@@ -81,5 +82,55 @@ describe("syncDayXp", () => {
     const r = syncDayXp(prev, day, entries, quests);
     expect(r.state.xp).toBe(5000 + r.gained);
     expect(r.state.activeDays).toEqual(["2026-09-29", day]);
+  });
+});
+
+describe("unir el juego de dos dispositivos", () => {
+  const base: GameState = { xp: 100, activeDays: ["2026-10-01"], awarded: ["2026-10-01:entry:0", "2026-10-01:streak"], history: [{ date: "2026-10-01", xp: 100, level: 1 }] };
+  const give = (g: GameState, day: string, keys: string[]): GameState => ({
+    xp: g.xp + keys.reduce((a, k) => a + awardXp(`${day}:${k}`), 0),
+    activeDays: [...new Set([...g.activeDays, day])],
+    awarded: [...g.awarded, ...keys.map((k) => `${day}:${k}`)],
+    history: [...g.history.filter((h) => h.date !== day), { date: day, xp: g.xp + keys.reduce((a, k) => a + awardXp(`${day}:${k}`), 0), level: 1 }],
+  });
+
+  it("sabe cuánto vale cada recompensa", () => {
+    expect(awardXp("2026-10-02:entry:3")).toBe(10);
+    expect(awardXp("2026-10-02:streak")).toBe(15);
+    expect(awardXp("2026-10-02:protein")).toBe(60);
+    expect(awardXp("2026-10-02:desconocida")).toBe(0);
+  });
+
+  it("suma lo ganado en cada uno sin contar dos veces lo común", () => {
+    const phone = give(base, "2026-10-02", ["entry:0", "streak", "protein"]); // +85
+    const laptop = give(base, "2026-10-02", ["entry:0", "streak", "meals3"]); // +65, comparte 25
+    const merged = mergeGame(phone, laptop);
+    expect(merged.xp).toBe(100 + 10 + 15 + 60 + 40);
+    expect(merged.awarded).toHaveLength(6);
+    expect(merged.activeDays).toEqual(["2026-10-01", "2026-10-02"]);
+    expect(merged.history.find((h) => h.date === "2026-10-02")?.xp).toBe(185);
+  });
+
+  it("no depende del orden, es estable y nunca baja la XP de ninguno", () => {
+    const phone = give(base, "2026-10-02", ["entry:0", "kcal"]);
+    const laptop = give(base, "2026-10-03", ["entry:0", "streak"]);
+    const merged = mergeGame(phone, laptop);
+    expect(mergeGame(laptop, phone)).toEqual(merged);
+    expect(mergeGame(merged, phone)).toEqual(merged);
+    expect(mergeGame(merged, merged)).toEqual(merged);
+    expect(merged.xp).toBeGreaterThanOrEqual(Math.max(phone.xp, laptop.xp));
+    // Un dispositivo sin nada (recién instalado) recibe todo.
+    expect(mergeGame({ xp: 0, activeDays: [], awarded: [], history: [] }, phone).xp).toBe(phone.xp);
+  });
+
+  it("no vuelve a sumar recompensas antiguas que un dispositivo ya contó y olvidó", () => {
+    const full: GameState = {
+      xp: 50_000,
+      activeDays: [],
+      awarded: Array.from({ length: MAX_AWARDED }, (_, i) => `2026-06-01:entry:${String(i).padStart(5, "0")}`),
+      history: [],
+    };
+    const stale: GameState = { xp: 500, activeDays: [], awarded: ["2025-01-01:protein", "2025-01-01:streak"], history: [] };
+    expect(mergeGame(full, stale).xp).toBe(50_000);
   });
 });
