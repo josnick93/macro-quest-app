@@ -16,7 +16,7 @@ function serviceWorker(): Plugin {
     apply: "build",
     enforce: "post",
     async generateBundle(_, bundle) {
-      // Cloudflare Pages redirige /index.html a /, y una respuesta redirigida no sirve para navegar: se guarda "/".
+      // Cloudflare redirige /index.html a /, y una respuesta redirigida no sirve para navegar: se guarda "/".
       const hash = createHash("sha256");
       const files: string[] = [];
       for (const [name, item] of Object.entries(bundle).sort(([a], [b]) => a.localeCompare(b))) {
@@ -26,7 +26,7 @@ function serviceWorker(): Plugin {
       }
       const publicDir = path.resolve(import.meta.dirname, "public");
       for (const name of readdirSync(publicDir).sort()) {
-        if (name.startsWith("_")) continue; // _redirects, _headers: configuración del alojamiento
+        if (name.startsWith("_")) continue; // _headers: configuración del alojamiento
         files.push(`/${name}`);
         hash.update(name).update(readFileSync(path.join(publicDir, name)));
       }

@@ -48,17 +48,15 @@ Abre la URL `Network: http://192.168.x.x:5173` en el móvil.
 
 `NO_SSL=1 npm run dev` arranca sin HTTPS (útil para navegadores que rechazan el certificado autofirmado).
 
-## Desplegar (Cloudflare Pages, gratis)
+## Desplegar (Cloudflare Workers, gratis)
 
-1. Sube el código a GitHub.
-2. Cloudflare → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** → elige `macro-quest-app`.
-3. Configuración:
-   - Framework preset: `Vite` (o ninguno)
+1. Cloudflare → **Workers & Pages** → **Create** → **Import a repository** → elige `macro-quest-app`.
+2. Configuración:
    - Build command: `npm run build`
-   - Build output directory: `dist`
-4. **Save and Deploy** → `https://macro-quest-app.pages.dev`
+   - Deploy command: `npx wrangler deploy`
+3. La configuración del despliegue está en `wrangler.jsonc` (sirve `dist` y devuelve `index.html` en cualquier ruta de la app).
 
-Cada `git push` a `main` vuelve a desplegar automáticamente.
+Cada `git push` a `main` vuelve a desplegar automáticamente. Para validar la configuración en local: `npm run build && npx wrangler deploy --dry-run`.
 
 ### Instalar en el móvil
 Abre la URL https → menú del navegador → **Añadir a pantalla de inicio** (Android: **Instalar aplicación**).
@@ -89,7 +87,7 @@ src/
     off.ts        Cliente de Open Food Facts
     hooks.ts      Hooks de datos (React Query)
     repos/        Capa de datos (IndexedDB) y migraciones
-public/         manifest, icono, _redirects (SPA)
+public/         manifest, iconos, _headers
 ```
 
 ## Backend futuro

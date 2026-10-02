@@ -63,5 +63,5 @@ src/
 - PWA: `sw.js` se genera al compilar (plugin en `vite.config.ts` + `src/sw.template.js`, sin dependencias) y precachea todos los archivos de la versión. Solo en producción; probar con `npm run build && NO_SSL=1 npm run preview`.
 - Preferencias por dispositivo (no son datos del usuario, no se exportan): localStorage `mq:*` (escaneo continuo, fecha de la última copia y del último aviso).
 - Escáner: la cámara en directo en iOS requiere HTTPS; por http en la red local funciona el botón "Hacer foto".
-- Deploy previsto: Cloudflare Pages (build `npm run build`, salida `dist`, `public/_redirects` para SPA).
+- Deploy: Cloudflare Workers con archivos estáticos (`wrangler.jsonc`: sirve `dist`, fallback SPA con `not_found_handling`). Build `npm run build`, deploy `npx wrangler deploy`. No usar `_redirects` con `/* /index.html 200`: en Workers se rechaza por bucle.
 - Backend futuro: Go o PocketBase en una Orange Pi expuesta con Cloudflare Tunnel.
