@@ -54,6 +54,12 @@ describe("cantidades", () => {
     expect(formatQuantity(defaultQuantity(yogur))).toBe("1 × 1 yogur");
     expect(quantityGrams(defaultQuantity(food("a", "a")))).toBe(100);
   });
+  it("un envase familiar no es la ración por defecto", () => {
+    const arroz = food("a", "Arroz", "off", { servings: [{ label: "envase", grams: 1000 }] });
+    expect(formatQuantity(defaultQuantity(arroz))).toBe("100 g");
+    const galletas = food("g", "Galletas", "off", { servings: [{ label: "envase", grams: 800 }, { label: "ración 30 g", grams: 30 }] });
+    expect(quantityGrams(defaultQuantity(galletas))).toBe(30);
+  });
   it("la última cantidad se expresa en raciones si encaja", () => {
     expect(formatQuantity(defaultQuantity(yogur, 250))).toBe("2 × 1 yogur");
     expect(formatQuantity(defaultQuantity(yogur, 90))).toBe("90 g");

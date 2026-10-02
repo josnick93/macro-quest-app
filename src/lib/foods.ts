@@ -83,9 +83,12 @@ export interface Quantity {
   amount: number;
 }
 
-/** Cantidad inicial: la última usada; si no, la primera ración; si no, 100 g. */
+/** Una "ración" mayor que esto es un envase familiar (1 kg de arroz), no lo que se come de una vez. */
+export const MAX_DEFAULT_SERVING_G = 600;
+
+/** Cantidad inicial: la última usada; si no, la primera ración individual; si no, 100 g. */
 export function defaultQuantity(food: Pick<Food, "servings">, lastGrams?: number): Quantity {
-  const serving = food.servings?.[0];
+  const serving = food.servings?.find((s) => s.grams <= MAX_DEFAULT_SERVING_G);
   if (lastGrams && lastGrams > 0) {
     // Si la última cantidad coincide con un número entero de raciones, mostrarla así.
     for (const s of food.servings ?? []) {

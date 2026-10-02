@@ -6,7 +6,7 @@ import type { Food, SavedMeal } from "@/lib/types";
 import { getFoodByBarcode, MIN_REMOTE_QUERY, searchFoods } from "@/lib/off";
 import { repos } from "@/lib/repos";
 import { defaultQuantity, formatQuantity, mergeSearch, quantityGrams, type SearchGroup } from "@/lib/foods";
-import { totalsFor } from "@/lib/nutrition";
+import { scaleMacros, totalsFor } from "@/lib/nutrition";
 import { useFoodLibrary, useSavedMeals } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +147,8 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
             <span className="block truncate text-xs">
               {f.brand && <span className="text-muted-foreground">{f.brand} · </span>}
               {f.edited && <span className="text-primary">corregido · </span>}
-              <MacroLine m={f.per100g} /> <span className="text-muted-foreground">/100 g</span>
+              {/* Macros de la cantidad que añade el «+» (ración habitual), no por 100 g. */}
+              <MacroLine m={scaleMacros(f.per100g, quantityGrams(qty))} />
             </span>
           </span>
         </button>
