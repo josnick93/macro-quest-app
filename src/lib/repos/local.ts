@@ -123,6 +123,9 @@ class IdbDiaryRepository implements DiaryRepository {
     );
     return list.sort((a, b) => a.date.localeCompare(b.date) || byCreatedAt(a, b));
   }
+  count() {
+    return run(["diary"], "readonly", (tx) => req(tx.objectStore("diary").count()));
+  }
   add(entries: NewEntry[]) {
     const base = Date.now();
     const full: DiaryEntry[] = entries.map((e, i) => {

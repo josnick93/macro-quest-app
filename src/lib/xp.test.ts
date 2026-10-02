@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { awardXp, currentStreak, dailyQuests, levelFromXp, MAX_AWARDED, mergeGame, syncDayXp, xpForLevel } from "./xp";
+import { awardXp, dailyQuests, grantAwards, levelFromXp, MAX_AWARDED, mergeGame, shieldedStreak, syncDayXp, weekStartISO, xpForLevel } from "./xp";
 import type { GameState } from "./types";
 import { DEFAULT_GAME } from "./repos/migrations";
 import type { DiaryEntry, Targets } from "./types";
@@ -27,19 +27,29 @@ describe("niveles", () => {
   });
 });
 
-describe("currentStreak", () => {
-  it("cuenta días seguidos hasta hoy", () => {
-    expect(currentStreak(["2026-09-28", "2026-09-29", "2026-09-30"], "2026-09-30")).toBe(3);
+describe("racha con escudo", () => {
+  // El 28 de septiembre de 2026 es lunes.
+  const streak = (days: string[], today: string) => shieldedStreak(days, today);
+
+  it("cuenta días seguidos hasta hoy y cruza meses", () => {
+    expect(streak(["2026-09-28", "2026-09-29", "2026-09-30"], "2026-09-30")).toEqual({ streak: 3, shieldReady: true, forgiven: [] });
+    expect(streak(["2026-08-31", "2026-09-01"], "2026-09-01").streak).toBe(2);
+    expect(weekStartISO("2026-10-04")).toBe("2026-09-28");
   });
-  it("si hoy aún no hay registro, mantiene la racha de ayer", () => {
-    expect(currentStreak(["2026-09-28", "2026-09-29"], "2026-09-30")).toBe(2);
+  it("si hoy aún no hay registro, ni rompe la racha ni gasta el escudo", () => {
+    expect(streak(["2026-09-28", "2026-09-29"], "2026-09-30")).toEqual({ streak: 2, shieldReady: true, forgiven: [] });
   });
-  it("se rompe si falta un día completo", () => {
-    expect(currentStreak(["2026-09-25", "2026-09-26"], "2026-09-30")).toBe(0);
-    expect(currentStreak(["2026-09-26", "2026-09-28", "2026-09-29"], "2026-09-29")).toBe(2);
+  it("perdona un día sin registro por semana; el día perdonado no suma", () => {
+    expect(streak(["2026-09-28", "2026-09-30"], "2026-09-30")).toEqual({ streak: 2, shieldReady: false, forgiven: ["2026-09-29"] });
+    // El hueco fue la semana pasada: el escudo de esta sigue disponible.
+    expect(streak(["2026-09-26", "2026-09-28", "2026-09-29"], "2026-09-29")).toEqual({ streak: 3, shieldReady: true, forgiven: ["2026-09-27"] });
+    // Ayer no registró y hoy todavía tampoco.
+    expect(streak(["2026-09-28"], "2026-09-30")).toEqual({ streak: 1, shieldReady: false, forgiven: ["2026-09-29"] });
   });
-  it("cruza meses", () => {
-    expect(currentStreak(["2026-08-31", "2026-09-01"], "2026-09-01")).toBe(2);
+  it("dos días sin registro en la misma semana sí la rompen", () => {
+    expect(streak(["2026-09-28", "2026-10-01"], "2026-10-01")).toEqual({ streak: 1, shieldReady: true, forgiven: [] });
+    expect(streak(["2026-09-20", "2026-09-21"], "2026-09-30")).toEqual({ streak: 0, shieldReady: true, forgiven: [] });
+    expect(streak([], "2026-09-30").streak).toBe(0);
   });
 });
 
@@ -86,12 +96,13 @@ describe("syncDayXp", () => {
 });
 
 describe("unir el juego de dos dispositivos", () => {
-  const base: GameState = { xp: 100, activeDays: ["2026-10-01"], awarded: ["2026-10-01:entry:0", "2026-10-01:streak"], history: [{ date: "2026-10-01", xp: 100, level: 1 }] };
+  const base: GameState = { xp: 100, activeDays: ["2026-10-01"], awarded: ["2026-10-01:entry:0", "2026-10-01:streak"], history: [{ date: "2026-10-01", xp: 100, level: 1 }], achievements: {} };
   const give = (g: GameState, day: string, keys: string[]): GameState => ({
     xp: g.xp + keys.reduce((a, k) => a + awardXp(`${day}:${k}`), 0),
     activeDays: [...new Set([...g.activeDays, day])],
     awarded: [...g.awarded, ...keys.map((k) => `${day}:${k}`)],
     history: [...g.history.filter((h) => h.date !== day), { date: day, xp: g.xp + keys.reduce((a, k) => a + awardXp(`${day}:${k}`), 0), level: 1 }],
+    achievements: g.achievements,
   });
 
   it("sabe cuánto vale cada recompensa", () => {
@@ -120,7 +131,7 @@ describe("unir el juego de dos dispositivos", () => {
     expect(mergeGame(merged, merged)).toEqual(merged);
     expect(merged.xp).toBeGreaterThanOrEqual(Math.max(phone.xp, laptop.xp));
     // Un dispositivo sin nada (recién instalado) recibe todo.
-    expect(mergeGame({ xp: 0, activeDays: [], awarded: [], history: [] }, phone).xp).toBe(phone.xp);
+    expect(mergeGame(DEFAULT_GAME, phone).xp).toBe(phone.xp);
   });
 
   it("no vuelve a sumar recompensas antiguas que un dispositivo ya contó y olvidó", () => {
@@ -129,8 +140,40 @@ describe("unir el juego de dos dispositivos", () => {
       activeDays: [],
       awarded: Array.from({ length: MAX_AWARDED }, (_, i) => `2026-06-01:entry:${String(i).padStart(5, "0")}`),
       history: [],
+      achievements: {},
     };
-    const stale: GameState = { xp: 500, activeDays: [], awarded: ["2025-01-01:protein", "2025-01-01:streak"], history: [] };
+    const stale: GameState = { xp: 500, activeDays: [], awarded: ["2025-01-01:protein", "2025-01-01:streak"], history: [], achievements: {} };
     expect(mergeGame(full, stale).xp).toBe(50_000);
+  });
+});
+
+describe("recompensas sueltas (semanales y logros)", () => {
+  it("valen lo que dice su clave", () => {
+    expect(awardXp("2026-09-28:w:kcal5")).toBe(150);
+    expect(awardXp("2026-09-28:w:weigh3")).toBe(75);
+    expect(awardXp("logro:streak-7")).toBe(100);
+    expect(awardXp("logro:inventado")).toBe(0);
+  });
+  it("se dan una sola vez y dejan el historial del día al día", () => {
+    const first = grantAwards(DEFAULT_GAME, "2026-10-02", [{ key: "2026-09-28:w:kcal5", xp: 150 }, { key: "logro:first-entry", xp: 50 }]);
+    expect(first.gained).toBe(200);
+    expect(first.state.history).toEqual([{ date: "2026-10-02", xp: 200, level: 1 }]);
+    const again = grantAwards(first.state, "2026-10-02", [{ key: "2026-09-28:w:kcal5", xp: 150 }]);
+    expect(again.gained).toBe(0);
+    expect(again.state).toBe(first.state);
+    expect(grantAwards({ ...DEFAULT_GAME, xp: 240 }, "2026-10-02", [{ key: "logro:first-entry", xp: 50 }]).levelUp).toBe(2);
+  });
+  it("al unir dos dispositivos, un logro cuenta una vez y conserva su fecha más antigua", () => {
+    const phone: GameState = { ...DEFAULT_GAME, xp: 150, awarded: ["logro:streak-7", "logro:first-entry"], achievements: { "streak-7": "2026-10-01T10:00:00.000Z", "first-entry": "2026-09-01T10:00:00.000Z" } };
+    const laptop: GameState = { ...DEFAULT_GAME, xp: 100, awarded: ["logro:first-entry", "logro:first-recipe"], achievements: { "first-entry": "2026-09-05T10:00:00.000Z", "first-recipe": "2026-09-06T10:00:00.000Z" } };
+    const merged = mergeGame(phone, laptop);
+    expect(merged.xp).toBe(200);
+    expect(merged.achievements).toEqual({
+      "first-entry": "2026-09-01T10:00:00.000Z",
+      "first-recipe": "2026-09-06T10:00:00.000Z",
+      "streak-7": "2026-10-01T10:00:00.000Z",
+    });
+    expect(mergeGame(laptop, phone)).toEqual(merged);
+    expect(mergeGame(merged, laptop)).toEqual(merged);
   });
 });

@@ -10,7 +10,10 @@ import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, S
 import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
 import { calcTargets, totalsFor } from "./nutrition";
 import { estimateTdee, kcalByDay, TDEE_WINDOW_DAYS, type TdeeEstimate } from "./goals";
-import { dailyQuests, syncDayXp } from "./xp";
+import { dailyQuests, shieldedStreak, syncDayXp, weekStartISO, type Quest } from "./xp";
+import { reachedTarget, syncGame, weeklyQuests, type Achievement, type AchievementContext, type Week } from "./gamification";
+import { dayStats } from "./progress";
+import { hasScanned } from "./scanFlag";
 import { addDaysISO, msUntilMidnight, todayISO } from "./date";
 
 const opts = { staleTime: 0, refetchOnWindowFocus: false } as const;
@@ -334,18 +337,91 @@ export function useGame() {
   return useQuery({ queryKey: ["game"], queryFn: () => repos.profile.getGame(), initialData: DEFAULT_GAME, ...opts });
 }
 
+/** Lo que hace falta, además del día, para las misiones semanales y los logros. */
+export interface GameExtras {
+  /** Semana actual y anterior (por si una misión se completó justo al acabar la semana). */
+  weeks: Week[];
+  context: AchievementContext;
+}
+
+/** Misiones de la semana en curso y datos para los logros. `extras` es null hasta que todo está cargado. */
+export function useGameExtras(today: string): { weekly: Quest[]; extras: GameExtras | null } {
+  const thisWeek = weekStartISO(today);
+  const lastWeek = addDaysISO(thisWeek, -7);
+  const range = useDiaryRange(lastWeek, addDaysISO(thisWeek, 6));
+  const weights = useWeights();
+  const recipes = useRecipes();
+  const foods = useFoods();
+  const profile = useProfile();
+  const profileSet = useProfileSet();
+  const game = useGame();
+  const count = useQuery({ queryKey: ["diary", "count"], queryFn: () => repos.diary.count(), ...opts });
+
+  const weeks = useMemo(
+    () =>
+      [thisWeek, lastWeek].map((start): Week => {
+        const end = addDaysISO(start, 6);
+        const stats = dayStats(range.data, start, end, (d) => calcTargets(profile.data, d));
+        return { start, quests: weeklyQuests(stats, weights.data.filter((w) => w.date >= start && w.date <= end).length) };
+      }),
+    [thisWeek, lastWeek, range.data, weights.data, profile.data],
+  );
+
+  const ready = range.isFetched && weights.isFetched && recipes.isFetched && foods.isFetched && profile.isFetched && game.isFetched && count.data !== undefined && profileSet !== undefined;
+  const latest = weights.data[weights.data.length - 1]?.kg;
+  const extras = useMemo(
+    (): GameExtras | null =>
+      ready
+        ? {
+            weeks,
+            context: {
+              streak: shieldedStreak(game.data.activeDays, today).streak,
+              entries: count.data ?? 0,
+              recipes: recipes.data.length,
+              customFoods: foods.data.filter((f) => f.source === "custom").length,
+              weighIns: weights.data.length,
+              scanned: hasScanned(),
+              atTargetWeight: profileSet === true && reachedTarget(profile.data, latest),
+            },
+          }
+        : null,
+    [ready, weeks, game.data.activeDays, today, count.data, recipes.data, foods.data, weights.data, profileSet, profile.data, latest],
+  );
+  return { weekly: weeks[0]!.quests, extras };
+}
+
+export interface GameRewards {
+  weeklyDone: Quest[];
+  unlocked: Achievement[];
+}
+
 /** Serializa las escrituras de XP para que dos sincronizaciones seguidas no se pisen. */
 let xpQueue: Promise<unknown> = Promise.resolve();
 
 /**
- * Otorga la XP del día. Solo actúa cuando el diario y el perfil reales están cargados
- * (nunca con los valores por defecto) y lee el estado de juego directamente del almacén,
- * así que no puede sobrescribir la XP guardada con un estado vacío.
+ * Otorga la XP del día y, con `extras`, la de las misiones semanales y los logros.
+ * Solo actúa cuando el diario y el perfil reales están cargados (nunca con los valores por defecto)
+ * y lee el estado de juego directamente del almacén, así que no puede sobrescribir la XP guardada con un estado vacío.
  */
-export function useXpSync(date: string, entries: DiaryEntry[], targets: Targets, ready: boolean, onLevelUp: (level: number) => void) {
+export function useXpSync(
+  date: string,
+  entries: DiaryEntry[],
+  targets: Targets,
+  ready: boolean,
+  onLevelUp: (level: number) => void,
+  today: string,
+  extras: GameExtras | null,
+  onRewards: (rewards: GameRewards) => void,
+) {
   const qc = useQueryClient();
   const levelUpRef = useRef(onLevelUp);
   levelUpRef.current = onLevelUp;
+  const rewardsRef = useRef(onRewards);
+  rewardsRef.current = onRewards;
+  const extrasRef = useRef(extras);
+  extrasRef.current = extras;
+  // Las misiones semanales y los logros solo se revisan cuando cambia algo de lo que dependen.
+  const extrasKey = extras ? JSON.stringify(extras) : "";
 
   useEffect(() => {
     if (!ready) return;
@@ -353,12 +429,26 @@ export function useXpSync(date: string, entries: DiaryEntry[], targets: Targets,
     xpQueue = xpQueue
       .then(async () => {
         const current: GameState = await repos.profile.getGame();
-        const result = syncDayXp(current, date, entries, quests);
-        if (result.gained === 0) return;
-        await repos.profile.saveGame(result.state);
-        qc.setQueryData(["game"], result.state);
-        if (result.levelUp) levelUpRef.current(result.levelUp);
+        const day = syncDayXp(current, date, entries, quests);
+        const extra = extrasRef.current;
+        // La racha se recalcula con el día recién contado.
+        const game = extra
+          ? syncGame(
+              day.state,
+              today,
+              extra.weeks,
+              { ...extra.context, streak: shieldedStreak(day.state.activeDays, today).streak },
+              new Date().toISOString(),
+            )
+          : null;
+        const state = game?.state ?? day.state;
+        if (day.gained === 0 && state === day.state) return;
+        await repos.profile.saveGame(state);
+        qc.setQueryData(["game"], state);
+        const levelUp = game?.levelUp ?? day.levelUp;
+        if (levelUp) levelUpRef.current(levelUp);
+        if (game && (game.weeklyDone.length > 0 || game.unlocked.length > 0)) rewardsRef.current({ weeklyDone: game.weeklyDone, unlocked: game.unlocked });
       })
       .catch((e) => console.error("XP sync", e));
-  }, [ready, date, entries, targets.kcal, targets.protein, qc]);
+  }, [ready, date, today, entries, targets.kcal, targets.protein, extrasKey, qc]);
 }

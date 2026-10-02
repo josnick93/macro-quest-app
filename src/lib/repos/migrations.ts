@@ -20,7 +20,7 @@ import { formulaTDEE, KCAL_PER_KG } from "../nutrition";
  * Versión del esquema de datos. Si cambia la forma de algo guardado:
  * sube este número y añade un paso en MIGRATIONS. Nunca se pierden datos.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const LEGACY_PREFIX = "sysnutri:";
 
@@ -36,7 +36,7 @@ export const DEFAULT_PROFILE: Profile = {
   fatPct: 25,
 };
 
-export const DEFAULT_GAME: GameState = { xp: 0, activeDays: [], awarded: [], history: [] };
+export const DEFAULT_GAME: GameState = { xp: 0, activeDays: [], awarded: [], history: [], achievements: {} };
 export const DEFAULT_SETTINGS: Settings = { hiddenMeals: [] };
 
 /**
@@ -44,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = { hiddenMeals: [] };
  * v2: `foods` guarda todos los alimentos conocidos (propios y de OFF usados/corregidos);
  * favoritos son ids; recientes y frecuentes se derivan del diario.
  * v3: el perfil guarda el ritmo en kg/semana (antes % del gasto) y medidas corporales opcionales.
+ * v4: el juego guarda los logros desbloqueados (`achievements`).
  */
 export interface Snapshot {
   diary: DiaryEntry[];
@@ -263,6 +264,8 @@ function game(v: unknown, diary: DiaryEntry[]): GameState {
     activeDays: [...days].sort(),
     awarded: arr(g.awarded).filter(str),
     history,
+    // v4. Antes no existía: se queda vacío y los logros ya cumplidos se desbloquean solos al abrir la app.
+    achievements: Object.fromEntries(Object.entries(isObj(g.achievements) ? g.achievements : {}).filter((kv): kv is [string, string] => str(kv[1]))),
   };
 }
 
@@ -373,6 +376,7 @@ export function fromLegacy(get: (key: string) => unknown, now = new Date().toISO
  * Pasos de migración entre versiones del formato de exportación. Índice = versión de origen.
  * v1 → v2 no necesita paso: normalizeSnapshot acepta ambas formas (recientes/favoritos como objetos o ids).
  * v2 → v3 tampoco: normalizeProfile convierte `adjustPct` en `rateKgWeek`.
+ * v3 → v4 tampoco: el juego sin `achievements` se normaliza con la lista vacía.
  */
 const MIGRATIONS: Record<number, (d: Obj) => Obj> = {};
 

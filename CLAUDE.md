@@ -34,7 +34,8 @@ src/
     nutrition.ts  Basal (Mifflin / Katch-McArdle con % de grasa), gasto, objetivos por día, % grasa (método Marina), macros de recetas
     goals.ts      Escenarios definición/mantenimiento/volumen, avisos de salud, plazo al peso objetivo, gasto real (TDEE adaptativo)
     progress.ts   Progreso: media móvil y ritmo del peso, proyección al objetivo, informe del periodo, calendario del mes
-    xp.ts         Misiones, XP, niveles, rachas
+    xp.ts         Misiones diarias, XP, niveles, racha con escudo, tabla de XP de semanales y logros, unión del juego entre dispositivos
+    gamification.ts Misiones semanales y logros (definición, condiciones y reparto de XP)
     off.ts        Cliente Open Food Facts (ODbL): pregunta a /api/off/* (worker) y, si no existe o falla, a OFF directo. Mínimo 3 letras
     offApi.ts     URLs y validación de OFF, compartidas entre la app y el worker
     hooks.ts      Hooks React Query sobre los repos
@@ -66,10 +67,11 @@ worker/         Cloudflare Worker. index.ts: /api/off/search y /api/off/product/
   - Importar una copia fecha todo como "ahora", marca como borrado lo que no venga en ella y lo sube: la copia manda en todos los dispositivos.
   - Lo que llega del servidor se valida con `normalizeRecord` y compañía antes de guardarse.
   - Límite del plan gratuito de D1: 50 consultas por petición; por eso los cambios se guardan en una sola sentencia (`json_each`).
-- Perfil (esquema v3): ritmo en kg/semana (`rateKgWeek`), medidas y % de grasa opcionales, `tdeeOverride` (gasto medido) y `weekdayKcal` (ajuste por día). Leer siempre con `normalizeProfile`.
+- Perfil (desde el esquema v3): ritmo en kg/semana (`rateKgWeek`), medidas y % de grasa opcionales, `tdeeOverride` (gasto medido) y `weekdayKcal` (ajuste por día). Leer siempre con `normalizeProfile`.
 - Sin perfil guardado (`isProfileSet` falso) la app lleva a `/bienvenida`; «Ahora no» vale solo esa sesión y Hoy avisa de que las kcal son de ejemplo. Nunca guardar el perfil de ejemplo por efecto secundario.
 - El pesaje más reciente actualiza `profile.weightKg` (y cambiar el peso en Perfil registra un pesaje).
 - Avisos de salud del plan: informativos y en ámbar, nunca bloquean.
+- Juego (esquema v4): `achievements` guarda id → fecha de cada logro. La racha con escudo y las misiones semanales no guardan nada: se derivan de los días activos, el diario y los pesajes. Toda recompensa nueva necesita su XP en `awardXp` (xp.ts), o no se contará al unir dos dispositivos.
 - Gamificación: nunca quita XP ni castiga comer más; pasarse del objetivo se muestra en ámbar (`--over`), nunca en rojo.
 
 ## Comandos

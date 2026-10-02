@@ -10,6 +10,7 @@ import { scaleMacros, totalsFor } from "@/lib/nutrition";
 import { useFoodLibrary, useSavedMeals } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
+import { markScanned } from "@/lib/scanFlag";
 const BarcodeScanner = lazy(() => import("./BarcodeScanner").then((m) => ({ default: m.BarcodeScanner })));
 
 type Tab = "recientes" | "frecuentes" | "favoritos" | "mios" | "recetas" | "comidas";
@@ -92,6 +93,7 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
 
   const handleCode = async (code: string) => {
     setScanning(false);
+    markScanned();
     lastFromScan.current = true;
     try {
       const local = await repos.foods.findByBarcode(code);

@@ -162,6 +162,8 @@ export interface GameState {
   activeDays: string[];
   awarded: string[];
   history: { date: string; xp: number; level: number }[];
+  /** Logros desbloqueados: id → fecha ISO en que se consiguió. */
+  achievements: Record<string, string>;
 }
 
 export interface Targets {
