@@ -6,6 +6,8 @@ describe("resultado del login", () => {
     expect(loginMessage("ok")).toMatchObject({ ok: true });
     expect(loginMessage("cancelado")).toMatchObject({ ok: false });
     expect(loginMessage("error")).toMatchObject({ ok: false });
+    expect(loginMessage("error", "sin_cookie")?.text).toContain("(sin_cookie)");
+    expect(loginMessage("error", "<script>")?.text).not.toContain("script");
   });
   it("ignora valores desconocidos", () => {
     expect(loginMessage(null)).toBeNull();

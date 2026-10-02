@@ -16,13 +16,14 @@ export function AccountWindow() {
 
   // Resultado del login al volver de Google: se muestra una vez y se limpia de la URL.
   const result = params.get("login");
+  const motivo = params.get("motivo");
   useEffect(() => {
-    const msg = loginMessage(result);
+    const msg = loginMessage(result, motivo);
     if (!msg) return;
     if (msg.ok) toast.success(msg.text);
-    else toast.info(msg.text);
-    setParams((p) => (p.delete("login"), p), { replace: true });
-  }, [result, setParams]);
+    else toast.info(msg.text, { duration: 15_000 });
+    setParams((p) => (p.delete("login"), p.delete("motivo"), p), { replace: true });
+  }, [result, motivo, setParams]);
 
   if (!session.enabled) return null;
 

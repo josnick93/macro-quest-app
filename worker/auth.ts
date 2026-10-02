@@ -86,15 +86,33 @@ function login(url: URL, env: Required<AuthEnv>): Response {
   return redirect(target.toString(), [cookie(STATE_COOKIE, state, STATE_SECONDS)]);
 }
 
+/** Código corto del error que devuelve Google al canjear el código (p. ej. invalid_client). Nunca incluye datos secretos. */
+async function googleError(res: Response): Promise<string> {
+  try {
+    const code = ((await res.json()) as { error?: unknown }).error;
+    if (typeof code === "string" && /^[a-z_]{1,40}$/.test(code)) return code;
+  } catch {
+    // Respuesta sin JSON: basta con el estado HTTP.
+  }
+  return `http_${res.status}`;
+}
+
 async function callback(request: Request, url: URL, env: Required<AuthEnv>, deps: AuthDeps): Promise<Response> {
   const clearState = cookie(STATE_COOKIE, "", 0);
-  const fail = (reason: string) => redirect(`${AFTER}?login=${reason}`, [clearState]);
+  // `motivo` dice en qué paso ha fallado; se ve en el aviso de la app y en los registros del worker.
+  const fail = (motivo: string) => {
+    console.warn(`login fallido: ${motivo}`);
+    return redirect(`${AFTER}?login=error&motivo=${motivo}`, [clearState]);
+  };
 
-  if (url.searchParams.get("error")) return fail("cancelado");
+  if (url.searchParams.get("error")) return redirect(`${AFTER}?login=cancelado`, [clearState]);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
+  if (!code || !state) return fail("respuesta");
   // El `state` debe coincidir con el que se dio a este navegador: evita que otro sitio inicie el login por ti.
-  if (!code || !state || state !== readCookie(request, STATE_COOKIE)) return fail("error");
+  const expected = readCookie(request, STATE_COOKIE);
+  if (!expected) return fail("sin_cookie");
+  if (state !== expected) return fail("estado");
 
   let user: User | null = null;
   try {
@@ -109,21 +127,26 @@ async function callback(request: Request, url: URL, env: Required<AuthEnv>, deps
         grant_type: "authorization_code",
       }).toString(),
     });
-    if (!res.ok) return fail("error");
+    if (!res.ok) return fail(`google_${await googleError(res)}`);
     const idToken = ((await res.json()) as { id_token?: unknown }).id_token;
     if (typeof idToken === "string") user = userFromIdToken(idToken, env.GOOGLE_CLIENT_ID, deps.now());
   } catch {
-    return fail("error");
+    return fail("red");
   }
-  if (!user) return fail("error");
+  if (!user) return fail("identidad");
 
   const nowMs = deps.now();
   const now = new Date(nowMs).toISOString();
   const expires = new Date(nowMs + SESSION_DAYS * 86_400_000).toISOString();
   const token = randomToken();
-  await ensureSchema(env.DB);
-  await upsertUser(env.DB, user, now);
-  await createSession(env.DB, user.id, await sha256(token), now, expires);
+  try {
+    await ensureSchema(env.DB);
+    await upsertUser(env.DB, user, now);
+    await createSession(env.DB, user.id, await sha256(token), now, expires);
+  } catch (e) {
+    console.error("login: fallo de la base de datos", e);
+    return fail("base");
+  }
   return redirect(`${AFTER}?login=ok`, [clearState, cookie(SESSION_COOKIE, token, SESSION_DAYS * 86_400)]);
 }
 
