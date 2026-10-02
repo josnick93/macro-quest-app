@@ -41,8 +41,10 @@ src/
     foods.ts      Recientes/frecuentes/última cantidad (derivados del diario), raciones, búsqueda unificada
     repos/        Capa de datos: types.ts (interfaces), local.ts (IndexedDB), idb.ts (envoltorio IndexedDB),
                   migrations.ts (versión de esquema, normalización, import/export), index.ts (selector)
-worker/         Cloudflare Worker: /api/off/search y /api/off/product/:código (reintentos ante 503, caché de Cloudflare,
-                España primero y luego todo el catálogo). Lo demás lo sirve desde dist. Tests en worker/index.test.ts
+worker/         Cloudflare Worker. index.ts: /api/off/search y /api/off/product/:código (reintentos ante 503, caché de Cloudflare,
+                España primero y luego todo el catálogo); lo demás lo sirve desde dist.
+                auth.ts + store.ts: login con Google (/api/auth/login|callback|me|logout|delete), usuarios y sesiones en D1.
+                Tests en worker/*.test.ts (los de auth usan una D1 local real vía wrangler)
 ```
 
 ## Arquitectura de datos
@@ -66,6 +68,8 @@ worker/         Cloudflare Worker: /api/off/search y /api/off/product/:código (
 - `npm test` (Vitest; tests de la lógica pura de `lib/`: nutrición, objetivos, XP, diario, alimentos, migraciones)
 
 ## Notas
+- Login: sesión en cookie `__Host-mq_session` (HttpOnly); en D1 solo se guarda el hash del token. Secretos `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en el panel de Cloudflare (en local, `.dev.vars`, que no se sube). Sin ellos la app funciona sin cuentas. El esquema de D1 se crea solo (`ensureSchema`). Los datos del diario aún no se sincronizan.
+- El service worker nunca intercepta `/api/*` (el login es una navegación).
 - PWA: `sw.js` se genera al compilar (plugin en `vite.config.ts` + `src/sw.template.js`, sin dependencias) y precachea todos los archivos de la versión. Solo en producción; probar con `npm run build && NO_SSL=1 npm run preview`.
 - Preferencias por dispositivo (no son datos del usuario, no se exportan): localStorage `mq:*` (escaneo continuo, fecha de la última copia y del último aviso).
 - Escáner: la cámara en directo en iOS requiere HTTPS; por http en la red local funciona el botón "Hacer foto".

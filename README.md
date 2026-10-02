@@ -59,6 +59,13 @@ Abre la URL `Network: http://192.168.x.x:5173` en el móvil.
 
 Cada `git push` a `main` vuelve a desplegar automáticamente. Para validar la configuración en local: `npm run build && npx wrangler deploy --dry-run`.
 
+### Login con Google
+1. Google Cloud Console → **APIs y servicios** → **Credenciales** → **Crear credenciales** → **ID de cliente de OAuth** → tipo **Aplicación web**. URI de redirección autorizado: `https://<tu-dominio>/api/auth/callback`.
+2. Cloudflare → el Worker → **Settings** → **Variables and Secrets** → añade como **Secret** `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+3. La base de datos D1 (`macro-quest`) se crea sola en el primer despliegue y las tablas, en el primer login.
+
+Sin esos secretos la app funciona igual, pero sin la ventana «Cuenta». Para probar en local, pon los dos valores en `.dev.vars` (no se sube al repo) y arranca `npm run build && npx wrangler dev`.
+
 ### Instalar en el móvil
 Abre la URL https → menú del navegador → **Añadir a pantalla de inicio** (Android: **Instalar aplicación**).
 

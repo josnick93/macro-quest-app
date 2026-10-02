@@ -50,6 +50,9 @@ self.addEventListener("fetch", (event) => {
   // Lo demás de otros orígenes (Open Food Facts…) va siempre a la red.
   if (url.origin !== self.location.origin) return;
 
+  // La API (login incluido, que es una navegación) va siempre a la red.
+  if (url.pathname.startsWith("/api/")) return;
+
   // Navegación: la app es una SPA, cualquier ruta abre el mismo index.html.
   if (req.mode === "navigate") {
     event.respondWith(caches.match(SHELL, MATCH).then((hit) => hit || fetch(req)));

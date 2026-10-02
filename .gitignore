@@ -35,3 +35,7 @@ pnpm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# wrangler (estado local y secretos de desarrollo)
+.wrangler/
+.dev.vars
