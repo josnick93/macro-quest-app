@@ -30,6 +30,7 @@ import {
   useDay,
   useGame,
   useProfile,
+  useProfileSet,
   usePutEntries,
   useRemoveEntries,
   useSaveSavedMeal,
@@ -61,6 +62,7 @@ export function TodayPage() {
 
   const targets = useTargets(date);
   const profileQ = useProfile();
+  const profileSet = useProfileSet();
   const dayQ = useDay(date);
   const entries = dayQ.data;
   const { data: previous } = useDay(prevDate);
@@ -119,6 +121,15 @@ export function TodayPage() {
         <button className="btn-ghost min-h-11 w-full text-xs" onClick={() => setDate(today)}>
           Volver a hoy
         </button>
+      )}
+
+      {profileSet === false && (
+        <SystemWindow title="Objetivo sin configurar" scan={false}>
+          <p className="text-sm">Las calorías que ves son de ejemplo. Dinos tus datos y calculamos las tuyas.</p>
+          <Link to="/bienvenida" className="btn-primary mt-3 min-h-11 w-full">
+            Configurar mi objetivo
+          </Link>
+        </SystemWindow>
       )}
 
       <SystemWindow title="Energía">

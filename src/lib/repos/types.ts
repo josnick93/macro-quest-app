@@ -44,6 +44,8 @@ export interface RecipeRepository {
 
 export interface ProfileRepository {
   getProfile(): Promise<Profile>;
+  /** false hasta que el usuario guarda su perfil por primera vez (mientras tanto se usa uno de ejemplo). */
+  isProfileSet(): Promise<boolean>;
   saveProfile(profile: Profile): Promise<void>;
   getGame(): Promise<GameState>;
   saveGame(state: GameState): Promise<void>;

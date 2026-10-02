@@ -36,10 +36,15 @@ export function useTargets(date?: string) {
   const { data } = useProfile();
   return calcTargets(data, date);
 }
+/** ¿Ha guardado el usuario su perfil? undefined mientras se carga. */
+export function useProfileSet(): boolean | undefined {
+  return useQuery({ queryKey: ["profile", "set"], queryFn: () => repos.profile.isProfileSet(), ...opts }).data;
+}
 export function useSaveProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (p: Profile) => repos.profile.saveProfile(p),
+    // Invalida también ["profile", "set"].
     onSuccess: () => qc.invalidateQueries({ queryKey: ["profile"] }),
   });
 }

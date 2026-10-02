@@ -32,6 +32,10 @@ describe("avisos", () => {
     expect(low.some((w) => w.includes("1200"))).toBe(true);
     expect(targetWarnings({ ...base, goal: "ganar", rateKgWeek: 0.5 }).some((w) => w.includes("0,5 %"))).toBe(true);
   });
+  it("avisa del déficit en menores, no del mantenimiento", () => {
+    expect(targetWarnings({ ...base, age: 16 }).some((w) => w.includes("18 años"))).toBe(true);
+    expect(targetWarnings({ ...base, age: 16, goal: "mantener" })).toEqual([]);
+  });
   it("avisa si el peso objetivo contradice el objetivo o es demasiado bajo", () => {
     expect(targetWarnings({ ...base, targetWeightKg: 85 })).toHaveLength(1);
     expect(targetWarnings({ ...base, targetWeightKg: 55 }).some((w) => w.includes("IMC"))).toBe(true);

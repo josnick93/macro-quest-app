@@ -195,6 +195,9 @@ class IdbProfileRepository implements ProfileRepository {
   async getProfile() {
     return normalizeProfile(await getKv<unknown>("profile", undefined));
   }
+  async isProfileSet() {
+    return (await getKv<unknown>("profile", undefined)) !== undefined;
+  }
   saveProfile(profile: Profile) {
     return setKv("profile", profile);
   }
