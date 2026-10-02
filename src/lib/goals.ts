@@ -34,6 +34,8 @@ export function targetWarnings(p: Profile): string[] {
   if (t.kcal < floor) out.push(`Menos de ${floor} kcal al día no es recomendable sin supervisión profesional.`);
   else if (t.kcal < Math.round(calcBMR(p))) out.push("El objetivo queda por debajo de tu metabolismo basal.");
 
+  if (p.goal === "perder" && p.age < 18) out.push("Con menos de 18 años no conviene comer en déficit sin supervisión profesional.");
+
   const pctWeek = p.weightKg > 0 ? (p.rateKgWeek / p.weightKg) * 100 : 0;
   if (p.goal === "perder" && pctWeek > 1) out.push("Ritmo alto: perder más del 1 % del peso por semana suele costar músculo.");
   if (p.goal === "ganar" && pctWeek > 0.5) out.push("Ritmo alto: por encima del 0,5 % por semana se gana sobre todo grasa.");

@@ -26,7 +26,8 @@ Vite 8 · React 19 · TypeScript 5.9 · Tailwind v4 · react-router-dom 7 · Tan
 ## Estructura
 ```
 src/
-  pages/        TodayPage (diario por días, ?fecha=), AddPage (?fecha=&comida=), RecipesPage, ProgressPage (lazy), ProfilePage
+  pages/        TodayPage (diario por días, ?fecha=), AddPage (?fecha=&comida=), RecipesPage, ProgressPage (lazy), ProfilePage,
+                WelcomePage (/bienvenida: primera vez, 3 pasos → perfil y objetivo)
   components/   SystemWindow, Sheet, BarcodeScanner (lazy), FoodPicker, MacroRing, XPBar, QuestItem…
   lib/
     types.ts      Modelos (Food, Entry, Recipe, Profile, Weight, Game…)
@@ -52,6 +53,7 @@ worker/         Cloudflare Worker: /api/off/search y /api/off/product/:código (
 - Cada entrada del diario guarda una copia de los macros (`per100g`): editar un alimento no reescribe el pasado.
 - Entidades con `updatedAt` y borrados registrados en `tombstones` (para sync last-write-wins futura).
 - Perfil (esquema v3): ritmo en kg/semana (`rateKgWeek`), medidas y % de grasa opcionales, `tdeeOverride` (gasto medido) y `weekdayKcal` (ajuste por día). Leer siempre con `normalizeProfile`.
+- Sin perfil guardado (`isProfileSet` falso) la app lleva a `/bienvenida`; «Ahora no» vale solo esa sesión y Hoy avisa de que las kcal son de ejemplo. Nunca guardar el perfil de ejemplo por efecto secundario.
 - El pesaje más reciente actualiza `profile.weightKg` (y cambiar el peso en Perfil registra un pesaje).
 - Avisos de salud del plan: informativos y en ámbar, nunca bloquean.
 - Gamificación: nunca quita XP ni castiga comer más; pasarse del objetivo se muestra en ámbar (`--over`), nunca en rojo.
