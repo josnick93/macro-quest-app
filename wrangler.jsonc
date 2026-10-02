@@ -1,10 +1,14 @@
-// Despliegue en Cloudflare Workers (archivos estáticos). El build lo hace `npm run build`.
+// Despliegue en Cloudflare Workers. El build lo hace `npm run build`.
 {
   "name": "macro-quest-app",
   "compatibility_date": "2026-10-01",
+  // Servidor intermedio para Open Food Facts (reintentos + caché). Solo atiende /api/*.
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
-    // SPA: cualquier ruta que no sea un archivo devuelve index.html (sustituye al antiguo _redirects).
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    // SPA: cualquier ruta que no sea un archivo devuelve index.html.
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   }
 }

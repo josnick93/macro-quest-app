@@ -1,18 +1,13 @@
 import type { Food, Nutrients, Serving } from "./types";
+import { MIN_REMOTE_QUERY, normalizeQuery, productUrl, searchUrl, type SearchScope } from "./offApi";
 
-/** Open Food Facts (licencia ODbL). Llamadas directas desde el navegador (OFF permite CORS). */
-const BASE = "https://world.openfoodfacts.org";
-const FIELDS = [
-  "code",
-  "product_name",
-  "product_name_es",
-  "brands",
-  "nutriments",
-  "serving_size",
-  "serving_quantity",
-  "product_quantity",
-].join(",");
+export { MIN_REMOTE_QUERY };
 
+/**
+ * Open Food Facts (licencia ODbL).
+ * Primero se pregunta al servidor intermedio de la app (/api/off/*: reintentos y caché);
+ * si no existe (desarrollo) o falla, se llama a OFF directamente desde el navegador.
+ */
 export interface OffProduct {
   code?: string;
   product_name?: string;
@@ -105,31 +100,40 @@ async function fetchWithRetry(url: string, signal?: AbortSignal, attempts = 3): 
   throw last;
 }
 
+/** Respuesta JSON del servidor intermedio; undefined si no está disponible (se usa entonces OFF directo). */
+async function viaProxy<T>(path: string, signal?: AbortSignal): Promise<T | undefined> {
+  try {
+    const res = await fetch(path, { signal });
+    if (!res.ok || !res.headers.get("content-type")?.includes("json")) return undefined;
+    return (await res.json()) as T;
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    return undefined;
+  }
+}
+
+async function searchDirect(q: string, signal?: AbortSignal): Promise<OffProduct[]> {
+  // Primero lo vendido en España; si no hay nada, todo el catálogo.
+  for (const scope of ["es", "world"] as SearchScope[]) {
+    const res = await fetchWithRetry(searchUrl(q, scope), signal);
+    const products = ((await res.json()) as { products?: OffProduct[] }).products ?? [];
+    if (products.length > 0) return products;
+  }
+  return [];
+}
+
 /** Caché en memoria de búsquedas (la sesión dura poco en móvil; basta para no repetir peticiones). */
 const cache = new Map<string, Food[]>();
 const CACHE_MAX = 60;
-/** OFF limita la búsqueda (~10 peticiones/min por IP): solo se consulta a partir de 3 letras. */
-export const MIN_REMOTE_QUERY = 3;
 
 export async function searchFoods(query: string, signal?: AbortSignal): Promise<Food[]> {
-  const q = query.trim().toLowerCase();
+  const q = normalizeQuery(query);
   if (q.length < MIN_REMOTE_QUERY) return [];
   const hit = cache.get(q);
   if (hit) return hit;
-  const url =
-    `${BASE}/cgi/search.pl?` +
-    new URLSearchParams({
-      search_terms: q,
-      search_simple: "1",
-      action: "process",
-      json: "1",
-      page_size: "25",
-      countries_tags_en: "spain",
-      fields: FIELDS,
-    }).toString();
-  const res = await fetchWithRetry(url, signal);
-  const json = (await res.json()) as { products?: OffProduct[] };
-  const foods = (json.products ?? []).map(toFood).filter((f): f is Food => f !== null);
+  const proxied = await viaProxy<{ products?: OffProduct[] }>(`/api/off/search?q=${encodeURIComponent(q)}`, signal);
+  const products = proxied?.products ?? (await searchDirect(q, signal));
+  const foods = products.map(toFood).filter((f): f is Food => f !== null);
   const seen = new Set<string>();
   const out = foods.filter((f) => (seen.has(f.id) ? false : (seen.add(f.id), true))).slice(0, 20);
   cache.set(q, out);
@@ -138,7 +142,9 @@ export async function searchFoods(query: string, signal?: AbortSignal): Promise<
 }
 
 export async function getFoodByBarcode(barcode: string): Promise<Food | null> {
-  const res = await fetch(`${BASE}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`);
+  const proxied = await viaProxy<{ product?: OffProduct | null }>(`/api/off/product/${encodeURIComponent(barcode)}`);
+  if (proxied && "product" in proxied) return proxied.product ? toFood({ ...proxied.product, code: barcode }) : null;
+  const res = await fetch(productUrl(barcode));
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Open Food Facts respondió ${res.status}`);
   const json = (await res.json()) as { status?: number; product?: OffProduct };
