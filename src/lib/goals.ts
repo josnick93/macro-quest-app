@@ -84,16 +84,10 @@ export function kcalByDay(entries: DiaryEntry[]): Record<string, number> {
 }
 
 /**
- * Gasto real = lo que comes de media − lo que cambia tu peso (tendencia × 7700 kcal/kg).
- * Los días con muy poco registrado (menos del 60 % de la mediana) se ignoran por incompletos.
- * La tendencia del peso es una regresión lineal, así que un pesaje suelto no la descoloca.
+ * Tendencia del peso: pendiente (kg/día) de la regresión lineal de los pesajes, así un pesaje suelto no la descoloca.
+ * `spanDays` son los días entre el primero y el último.
  */
-export function estimateTdee(kcal: Record<string, number>, weights: WeightLog[]): TdeeEstimate {
-  const logged = Object.values(kcal).filter((k) => k > 0).sort((a, b) => a - b);
-  const median = logged.length ? logged[Math.floor(logged.length / 2)]! : 0;
-  const complete = logged.filter((k) => k >= median * 0.6);
-  const avgKcal = complete.length ? complete.reduce((a, k) => a + k, 0) / complete.length : 0;
-
+export function weightSlope(weights: WeightLog[]): { slope: number; spanDays: number; count: number } {
   const ws = [...weights].sort((a, b) => a.date.localeCompare(b.date));
   const first = ws[0];
   const xs = first ? ws.map((w) => diffDays(first.date, w.date)) : [];
@@ -105,12 +99,26 @@ export function estimateTdee(kcal: Record<string, number>, weights: WeightLog[])
     const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
     slope = den > 0 ? ws.reduce((a, w, i) => a + (xs[i]! - mx) * (w.kg - my), 0) / den : 0;
   }
+  return { slope, spanDays, count: ws.length };
+}
 
-  const enough = complete.length >= TDEE_MIN_DAYS && ws.length >= TDEE_MIN_WEIGHINS && spanDays >= TDEE_MIN_SPAN;
+/**
+ * Gasto real = lo que comes de media − lo que cambia tu peso (tendencia × 7700 kcal/kg).
+ * Los días con muy poco registrado (menos del 60 % de la mediana) se ignoran por incompletos.
+ */
+export function estimateTdee(kcal: Record<string, number>, weights: WeightLog[]): TdeeEstimate {
+  const logged = Object.values(kcal).filter((k) => k > 0).sort((a, b) => a - b);
+  const median = logged.length ? logged[Math.floor(logged.length / 2)]! : 0;
+  const complete = logged.filter((k) => k >= median * 0.6);
+  const avgKcal = complete.length ? complete.reduce((a, k) => a + k, 0) / complete.length : 0;
+
+  const { slope, spanDays, count } = weightSlope(weights);
+
+  const enough = complete.length >= TDEE_MIN_DAYS && count >= TDEE_MIN_WEIGHINS && spanDays >= TDEE_MIN_SPAN;
   const raw = avgKcal - slope * KCAL_PER_KG;
   return {
     days: complete.length,
-    weighIns: ws.length,
+    weighIns: count,
     spanDays,
     avgKcal: Math.round(avgKcal),
     kgPerWeek: Math.round(slope * 7 * 100) / 100,
