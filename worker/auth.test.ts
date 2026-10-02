@@ -35,7 +35,7 @@ const google = (token: string | null, calls: RequestInit[] = []): AuthDeps => ({
   now: () => NOW,
   fetcher: async (_url, init) => {
     calls.push(init!);
-    return token ? new Response(JSON.stringify({ id_token: token })) : new Response("{}", { status: 400 });
+    return token ? new Response(JSON.stringify({ id_token: token })) : new Response(JSON.stringify({ error: "invalid_client" }), { status: 401 });
   },
 });
 const get = (path: string, cookie = "") => new Request(`${ORIGIN}/api/auth/${path}`, { headers: cookie ? { cookie } : {} });
@@ -119,15 +119,17 @@ describe("inicio de sesión", () => {
     const start = await handleAuth(get("login"), env(), google(null));
     const stateCookie = cookieOf(start, "__Host-mq_oauth")!;
     const bad = await handleAuth(get("callback?code=abc&state=otro", stateCookie), env(), google(idToken()));
-    expect(bad.headers.get("location")).toBe("/perfil?login=error");
+    expect(bad.headers.get("location")).toBe("/perfil?login=error&motivo=estado");
+    const noCookie = await handleAuth(get("callback?code=abc&state=otro"), env(), google(idToken()));
+    expect(noCookie.headers.get("location")).toBe("/perfil?login=error&motivo=sin_cookie");
     expect(cookieOf(bad, "__Host-mq_session")).toBeNull();
     const cancelled = await handleAuth(get("callback?error=access_denied", stateCookie), env(), google(idToken()));
     expect(cancelled.headers.get("location")).toBe("/perfil?login=cancelado");
     const state = stateCookie.split("=")[1]!;
     const forged = await handleAuth(get(`callback?code=abc&state=${state}`, stateCookie), env(), google(idToken({ aud: "otra-app" })));
-    expect(forged.headers.get("location")).toBe("/perfil?login=error");
+    expect(forged.headers.get("location")).toBe("/perfil?login=error&motivo=identidad");
     const down = await handleAuth(get(`callback?code=abc&state=${state}`, stateCookie), env(), google(null));
-    expect(down.headers.get("location")).toBe("/perfil?login=error");
+    expect(down.headers.get("location")).toBe("/perfil?login=error&motivo=google_invalid_client");
   });
 
   it("una sesión inventada o caducada no vale", async () => {

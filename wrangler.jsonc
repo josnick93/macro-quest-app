@@ -6,6 +6,8 @@
   "main": "worker/index.ts",
   // Los secretos GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET se ponen en el panel de Cloudflare; no se pisan al desplegar.
   "keep_vars": true,
+  // Registros del worker en el panel (p. ej. por qué falla un login).
+  "observability": { "enabled": true },
   // Usuarios y sesiones. Sin `database_id`: Cloudflare crea la base en el primer despliegue.
   "d1_databases": [{ "binding": "DB", "database_name": "macro-quest" }],
   "assets": {

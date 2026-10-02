@@ -35,10 +35,13 @@ async function post(path: string): Promise<void> {
 export const logout = () => post("/api/auth/logout");
 export const deleteAccount = () => post("/api/auth/delete");
 
-/** Mensaje para el resultado que el servidor deja en ?login= al volver de Google. */
-export function loginMessage(result: string | null): { ok: boolean; text: string } | null {
+/** Mensaje para el resultado que el servidor deja en ?login= (y ?motivo= si falla) al volver de Google. */
+export function loginMessage(result: string | null, motivo: string | null = null): { ok: boolean; text: string } | null {
   if (result === "ok") return { ok: true, text: "Sesión iniciada" };
   if (result === "cancelado") return { ok: false, text: "Has cancelado el inicio de sesión" };
-  if (result === "error") return { ok: false, text: "No se pudo iniciar sesión. Inténtalo de nuevo." };
+  if (result === "error") {
+    const code = motivo && /^[a-z0-9_]{1,60}$/.test(motivo) ? ` (${motivo})` : "";
+    return { ok: false, text: `No se pudo iniciar sesión${code}. Inténtalo de nuevo.` };
+  }
   return null;
 }
