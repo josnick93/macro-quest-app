@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { repos } from "./repos";
+import { deleteAccount, fetchSession, logout, type SessionInfo } from "./auth";
 import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS } from "./repos/local";
 import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, Targets, WeightLog } from "./types";
 import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
@@ -211,6 +212,26 @@ export function useTdeeEstimate(): TdeeEstimate {
   const { data: entries } = useDiaryRange(from, to);
   const { data: weights } = useWeights();
   return useMemo(() => estimateTdee(kcalByDay(entries), weights.filter((w) => w.date >= from && w.date <= today)), [entries, weights, from, today]);
+}
+
+/** Sesión de Google. Mientras no se sabe (o sin servidor), cuenta como "sin login". */
+export function useSession() {
+  return useQuery({
+    queryKey: ["session"],
+    queryFn: fetchSession,
+    initialData: { enabled: false, user: null } as SessionInfo,
+    initialDataUpdatedAt: 0,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+export function useLogout() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: logout, onSuccess: () => qc.invalidateQueries({ queryKey: ["session"] }) });
+}
+export function useDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: deleteAccount, onSuccess: () => qc.invalidateQueries({ queryKey: ["session"] }) });
 }
 
 export function useGame() {

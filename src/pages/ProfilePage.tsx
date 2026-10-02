@@ -3,6 +3,7 @@ import { Download, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
 import { SystemWindow } from "@/components/SystemWindow";
+import { AccountWindow } from "@/components/AccountWindow";
 import { fmt, Num, ScenarioCard, Seg, signed } from "@/components/ProfileControls";
 import { MEALS, type Activity, type Profile, type Sex } from "@/lib/types";
 import { ACTIVITY_LABELS, calcTargets, formulaTDEE, goalDeltaKcal, leanMassKg, navyBodyFat } from "@/lib/nutrition";
@@ -301,6 +302,8 @@ export function ProfilePage() {
         </div>
         <p className="text-muted-foreground mt-3 text-[11px]">Las ocultas siguen apareciendo en el diario si tienen algo registrado.</p>
       </SystemWindow>
+
+      <AccountWindow />
 
       <SystemWindow title="Datos" scan={false}>
         <span id="datos" className="block scroll-mt-4" />
