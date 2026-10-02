@@ -1,9 +1,9 @@
-import { fromLegacy, LEGACY_PREFIX, normalizeSnapshot, SCHEMA_VERSION, type Snapshot } from "./migrations";
+import { fromLegacy, LEGACY_PREFIX, normalizeProfile, normalizeSnapshot, SCHEMA_VERSION, type Snapshot } from "./migrations";
 
 /** Envoltorio mínimo de IndexedDB (sin dependencias). */
 
 export const DB_NAME = "macro-quest";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export type StoreName = "diary" | "notes" | "foods" | "recipes" | "savedMeals" | "weights" | "kv" | "tombstones";
 export const DATA_STORES: StoreName[] = ["diary", "notes", "foods", "recipes", "savedMeals", "weights", "kv", "tombstones"];
@@ -112,7 +112,16 @@ export function openDb(): Promise<IDBDatabase> {
           writeSnapshot(tx, snapshot);
         });
       }
-      // Futuras versiones: if (ev.oldVersion < 3) { ... }
+      if (ev.oldVersion === 2) {
+        // v2 → v3: no cambian los stores; el perfil pasa de % de ajuste a kg/semana.
+        const kv = tx.objectStore("kv");
+        const r = kv.get("profile");
+        r.onsuccess = () => {
+          if (r.result) kv.put(normalizeProfile(r.result), "profile");
+          kv.put(SCHEMA_VERSION, "schema");
+        };
+      }
+      // Futuras versiones: if (ev.oldVersion === 3) { ... }
     };
     open.onsuccess = () => {
       const db = open.result;

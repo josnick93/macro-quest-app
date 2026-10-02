@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
-import { Download, Upload } from "lucide-react";
+import { Download, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { SystemWindow } from "@/components/SystemWindow";
-import { MEALS, type Activity, type Goal, type Profile, type Sex } from "@/lib/types";
-import { ACTIVITY_LABELS, calcTargets } from "@/lib/nutrition";
-import { useProfile, useSaveProfile, useSaveSettings, useSaveWeight, useSettings } from "@/lib/hooks";
+import { MEALS, type Activity, type Profile, type Sex } from "@/lib/types";
+import { ACTIVITY_LABELS, calcTargets, formulaTDEE, goalDeltaKcal, leanMassKg, navyBodyFat } from "@/lib/nutrition";
+import { GOAL_LABELS, scenarios, targetWarnings, TDEE_MIN_DAYS, TDEE_MIN_WEIGHINS, TDEE_WINDOW_DAYS, weeksToTarget, type Scenario } from "@/lib/goals";
+import { useProfile, useSaveProfile, useSaveSettings, useSaveWeight, useSettings, useTdeeEstimate } from "@/lib/hooks";
 import { repos } from "@/lib/repos";
 import { ImportError, parseImport, SCHEMA_VERSION, type ExportFile } from "@/lib/repos/migrations";
-import { todayISO } from "@/lib/date";
+import { addDaysISO, todayISO } from "@/lib/date";
 import { cn } from "@/lib/utils";
+
+const WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const WEEKDAY_STEP = 50;
+const WEEKDAY_LIMIT = 1500;
+
+const fmt = (n: number, digits = 2) => n.toLocaleString("es-ES", { maximumFractionDigits: digits });
+const signed = (n: number, digits = 2) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmt(Math.abs(n), digits)}`;
 
 function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
@@ -27,28 +35,69 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
   );
 }
 
-function Num({ label, value, onChange, step = 1, suffix }: { label: string; value: number; onChange: (n: number) => void; step?: number; suffix?: string }) {
-  const [s, setS] = useState(String(value));
-  useEffect(() => setS(String(value)), [value]);
+const parseNum = (s: string) => {
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? undefined : n;
+};
+
+/** Campo numérico; vacío = undefined (los campos obligatorios ignoran ese valor). */
+function Num({
+  label,
+  value,
+  onChange,
+  suffix,
+  placeholder,
+}: {
+  label: string;
+  value: number | undefined;
+  onChange: (n: number | undefined) => void;
+  suffix?: string;
+  placeholder?: string;
+}) {
+  const [s, setS] = useState(value === undefined ? "" : String(value));
+  // Solo se resincroniza si el valor cambia desde fuera (no mientras se escribe "80,").
+  useEffect(() => {
+    if (parseNum(s) !== value) setS(value === undefined ? "" : String(value));
+  }, [value]);
   return (
-    <div>
+    <label className="block">
       <span className="label-sys">{label}</span>
-      <div className="relative">
+      <span className="relative block">
         <input
           className="field tabular-nums"
           inputMode="decimal"
-          step={step}
+          placeholder={placeholder}
           value={s}
           onChange={(e) => {
             const v = e.target.value.replace(",", ".");
             setS(v);
-            const n = parseFloat(v);
-            if (!Number.isNaN(n)) onChange(n);
+            onChange(parseNum(v));
           }}
         />
         {suffix && <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs">{suffix}</span>}
-      </div>
-    </div>
+      </span>
+    </label>
+  );
+}
+
+function ScenarioCard({ s, onSelect }: { s: Scenario; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={s.active}
+      onClick={onSelect}
+      className={cn("min-h-24 border px-1 py-2 text-center", s.active ? "border-primary bg-primary/15" : "border-border")}
+    >
+      <span className={cn("block text-[11px]", s.active ? "text-primary" : "text-muted-foreground")}>{GOAL_LABELS[s.goal]}</span>
+      <span className="font-display block text-xl font-bold tabular-nums">{s.targets.kcal}</span>
+      <span className="text-muted-foreground block text-[10px] tabular-nums">
+        {s.goal === "mantener" ? "peso estable" : `${signed(s.goal === "perder" ? -s.rateKgWeek : s.rateKgWeek)} kg/sem`}
+      </span>
+      <span className="block text-[10px] tabular-nums">
+        <span className="text-protein">{s.targets.protein}</span> · <span className="text-carbs">{s.targets.carbs}</span> ·{" "}
+        <span className="text-fat">{s.targets.fat}</span>
+      </span>
+    </button>
   );
 }
 
@@ -58,6 +107,7 @@ export function ProfilePage() {
   const saveWeight = useSaveWeight();
   const { data: settings } = useSettings();
   const saveSettings = useSaveSettings();
+  const estimate = useTdeeEstimate();
   const toggleMeal = (id: (typeof MEALS)[number]["id"]) => {
     const hidden = settings.hiddenMeals.includes(id) ? settings.hiddenMeals.filter((m) => m !== id) : [...settings.hiddenMeals, id];
     if (hidden.length === MEALS.length) return toast.error("Deja al menos una comida visible");
@@ -65,8 +115,26 @@ export function ProfilePage() {
   };
   const [p, setP] = useState<Profile>(data);
   useEffect(() => setP(data), [data]);
-  const t = calcTargets(p);
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setP((x) => ({ ...x, [k]: v }));
+  const req = <K extends "age" | "heightCm" | "weightKg" | "proteinPerKg" | "fatPct">(k: K) => (n: number | undefined) => {
+    if (n !== undefined) set(k, n);
+  };
+  const dirty = JSON.stringify(p) !== JSON.stringify(data);
+
+  const t = calcTargets(p);
+  const warnings = targetWarnings(p);
+  const lean = leanMassKg(p);
+  const navy = navyBodyFat(p);
+  const delta = Math.round(goalDeltaKcal(p));
+  const weeks = weeksToTarget(p);
+  const formula = Math.round(formulaTDEE(p));
+  const week = p.weekdayKcal ?? [0, 0, 0, 0, 0, 0, 0];
+  const weekAvg = Math.round(t.kcal + week.reduce((a, x) => a + x, 0) / 7);
+
+  const bumpWeekday = (i: number, by: number) => {
+    const next = week.map((x, j) => (j === i ? Math.max(-WEEKDAY_LIMIT, Math.min(WEEKDAY_LIMIT, x + by)) : x));
+    set("weekdayKcal", next.some((x) => x !== 0) ? next : undefined);
+  };
 
   const submit = async () => {
     await save.mutateAsync(p);
@@ -102,10 +170,10 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", dirty && "pb-16")}>
       <header className="px-1">
         <h1 className="font-display text-2xl font-bold">Perfil</h1>
-        <p className="text-muted-foreground text-xs">Parámetros del jugador y objetivos</p>
+        <p className="text-muted-foreground text-xs">Tus medidas y tu plan: definición, mantenimiento o volumen</p>
       </header>
 
       <SystemWindow title="Objetivo diario">
@@ -128,20 +196,79 @@ export function ProfilePage() {
           </div>
         </div>
         <p className="text-muted-foreground mt-3 text-center text-[11px] tabular-nums">
-          Metabolismo basal {t.bmr} kcal · Gasto total {t.tdee} kcal
+          Basal {t.bmr} kcal ({lean !== null ? "masa magra" : "Mifflin-St Jeor"}) · Gasto {t.tdee} kcal{p.tdeeOverride ? " (medido)" : ""}
         </p>
+        {warnings.length > 0 && (
+          <ul className="text-over mt-3 space-y-1 text-[11px]">
+            {warnings.map((w) => (
+              <li key={w} className="flex gap-2">
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {w}
+              </li>
+            ))}
+          </ul>
+        )}
       </SystemWindow>
 
-      <SystemWindow title="Atributos" scan={false}>
+      <SystemWindow title="Plan" scan={false}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {scenarios(p).map((s) => (
+              <ScenarioCard key={s.goal} s={s} onSelect={() => setP((x) => ({ ...x, goal: s.goal, rateKgWeek: s.goal === "mantener" ? x.rateKgWeek : s.rateKgWeek }))} />
+            ))}
+          </div>
+          <p className="text-muted-foreground -mt-2 text-[10px]">kcal al día · gramos de proteína · carbohidratos · grasa</p>
+          {p.goal !== "mantener" && (
+            <div>
+              <label className="label-sys" htmlFor="rate">
+                Ritmo: {fmt(p.rateKgWeek)} kg/semana · {signed(delta, 0)} kcal/día
+              </label>
+              <input
+                id="rate"
+                type="range"
+                min={0.05}
+                max={p.goal === "perder" ? 1 : 0.5}
+                step={0.05}
+                value={p.rateKgWeek}
+                onChange={(e) => set("rateKgWeek", +e.target.value)}
+                className="accent-primary min-h-11 w-full"
+              />
+              <p className="text-muted-foreground text-[11px] tabular-nums">
+                {fmt((p.rateKgWeek / p.weightKg) * 100)} % de tu peso por semana
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 items-end gap-2">
+            <Num label="Peso objetivo" value={p.targetWeightKg} onChange={(n) => set("targetWeightKg", n && n > 0 ? n : undefined)} suffix="kg" placeholder="opcional" />
+            <p className="text-muted-foreground pb-2 text-[11px] tabular-nums">
+              {weeks !== null
+                ? `≈ ${Math.ceil(weeks)} semanas · ${new Date(`${addDaysISO(todayISO(), Math.ceil(weeks * 7))}T12:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}`
+                : p.targetWeightKg && p.goal === "mantener"
+                  ? "Elige definición o volumen para ver el plazo."
+                  : ""}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Num label="Proteína" value={p.proteinPerKg} onChange={req("proteinPerKg")} suffix="g/kg" />
+            <Num label="Grasa" value={p.fatPct} onChange={req("fatPct")} suffix="% kcal" />
+          </div>
+          {lean !== null && (
+            <p className="text-muted-foreground -mt-2 text-[11px] tabular-nums">
+              {t.protein} g de proteína = {fmt(t.protein / lean, 1)} g por kg de masa magra ({fmt(lean, 1)} kg)
+            </p>
+          )}
+        </div>
+      </SystemWindow>
+
+      <SystemWindow title="Medidas" scan={false}>
         <div className="space-y-4">
           <div>
             <span className="label-sys">Sexo</span>
             <Seg<Sex> value={p.sex} onChange={(v) => set("sex", v)} options={[["hombre", "Hombre"], ["mujer", "Mujer"]]} />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <Num label="Edad" value={p.age} onChange={(n) => set("age", n)} />
-            <Num label="Altura" value={p.heightCm} onChange={(n) => set("heightCm", n)} suffix="cm" />
-            <Num label="Peso" value={p.weightKg} onChange={(n) => set("weightKg", n)} step={0.1} suffix="kg" />
+            <Num label="Edad" value={p.age} onChange={req("age")} />
+            <Num label="Altura" value={p.heightCm} onChange={req("heightCm")} suffix="cm" />
+            <Num label="Peso" value={p.weightKg} onChange={req("weightKg")} suffix="kg" />
           </div>
           <div>
             <label className="label-sys" htmlFor="act">Actividad</label>
@@ -151,24 +278,83 @@ export function ProfilePage() {
               ))}
             </select>
           </div>
-          <div>
-            <span className="label-sys">Objetivo</span>
-            <Seg<Goal> value={p.goal} onChange={(v) => set("goal", v)} options={[["perder", "Perder"], ["mantener", "Mantener"], ["ganar", "Ganar"]]} />
+          <div className={cn("grid gap-2", p.sex === "mujer" ? "grid-cols-3" : "grid-cols-2")}>
+            <Num label="Cuello" value={p.neckCm} onChange={(n) => set("neckCm", n)} suffix="cm" />
+            <Num label="Cintura" value={p.waistCm} onChange={(n) => set("waistCm", n)} suffix="cm" />
+            {p.sex === "mujer" && <Num label="Cadera" value={p.hipCm} onChange={(n) => set("hipCm", n)} suffix="cm" />}
           </div>
-          {p.goal !== "mantener" && (
-            <div>
-              <span className="label-sys">
-                {p.goal === "perder" ? "Déficit" : "Superávit"}: {p.adjustPct}%
-              </span>
-              <input type="range" min={0} max={30} step={1} value={p.adjustPct} onChange={(e) => set("adjustPct", +e.target.value)} className="accent-primary w-full" />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <Num label="Proteína" value={p.proteinPerKg} onChange={(n) => set("proteinPerKg", n)} step={0.1} suffix="g/kg" />
-            <Num label="Grasa" value={p.fatPct} onChange={(n) => set("fatPct", n)} suffix="% kcal" />
+          <div className="grid grid-cols-2 items-end gap-2">
+            <Num label="Grasa corporal" value={p.bodyFatPct} onChange={(n) => set("bodyFatPct", n && n > 0 ? n : undefined)} suffix="%" placeholder="opcional" />
+            {navy !== null && navy !== p.bodyFatPct ? (
+              <button type="button" className="btn-ghost min-h-11 text-xs" onClick={() => set("bodyFatPct", navy)}>
+                Usar {fmt(navy, 1)} % (medidas)
+              </button>
+            ) : (
+              <p className="text-muted-foreground pb-2 text-[11px]">
+                {navy !== null ? "Calculado con tus medidas." : "Con cuello y cintura se estima solo."}
+              </p>
+            )}
           </div>
-          <button className="btn-primary w-full" onClick={submit} disabled={save.isPending}>Guardar</button>
+          <p className="text-muted-foreground text-[11px]">
+            Cintura a la altura del ombligo{p.sex === "mujer" ? ", cadera en la parte más ancha" : ""}. Con el % de grasa, el basal se calcula sobre tu masa magra.
+          </p>
         </div>
+      </SystemWindow>
+
+      <SystemWindow title="Gasto real" scan={false}>
+        {estimate.tdee !== null ? (
+          <p className="text-sm tabular-nums">
+            En los últimos {TDEE_WINDOW_DAYS} días comes <strong>{estimate.avgKcal} kcal</strong> de media y tu peso cambia{" "}
+            <strong>{signed(estimate.kgPerWeek)} kg/semana</strong>: gastas unas <strong className="text-primary">{estimate.tdee} kcal</strong> al día.
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-sm tabular-nums">
+            Con {TDEE_MIN_DAYS} días de diario y {TDEE_MIN_WEIGHINS} pesajes repartidos en dos semanas se calcula tu gasto real. Llevas {estimate.days}{" "}
+            {estimate.days === 1 ? "día" : "días"} y {estimate.weighIns} {estimate.weighIns === 1 ? "pesaje" : "pesajes"} en los últimos {TDEE_WINDOW_DAYS} días.
+          </p>
+        )}
+        <p className="text-muted-foreground mt-2 text-[11px] tabular-nums">
+          {p.tdeeOverride ? `Usando gasto medido: ${p.tdeeOverride} kcal · la fórmula da ${formula} kcal.` : `Usando la fórmula: ${formula} kcal.`}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {estimate.tdee !== null && estimate.tdee !== p.tdeeOverride && (
+            <button type="button" className="btn-ghost min-h-11 text-xs" onClick={() => set("tdeeOverride", estimate.tdee ?? undefined)}>
+              Usar {estimate.tdee} kcal
+            </button>
+          )}
+          {p.tdeeOverride && (
+            <button type="button" className="btn-ghost min-h-11 text-xs" onClick={() => set("tdeeOverride", undefined)}>
+              Volver a la fórmula
+            </button>
+          )}
+        </div>
+      </SystemWindow>
+
+      <SystemWindow title="Por día de la semana" scan={false}>
+        <details>
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm">
+            {p.weekdayKcal ? `Media semanal: ${weekAvg} kcal/día` : "Mismas calorías todos los días"}
+          </summary>
+          <ul className="divide-border/40 divide-y">
+            {WEEKDAYS.map((d, i) => (
+              <li key={d} className="flex items-center gap-2 py-1">
+                <span className="min-w-0 flex-1 text-sm">
+                  {d}
+                  <span className="text-muted-foreground block text-[11px] tabular-nums">
+                    {t.kcal + week[i]!} kcal{week[i] ? ` (${signed(week[i]!, 0)})` : ""}
+                  </span>
+                </span>
+                <button type="button" aria-label={`Menos calorías el ${d.toLowerCase()}`} className="border-border flex h-11 w-11 items-center justify-center border" onClick={() => bumpWeekday(i, -WEEKDAY_STEP)}>
+                  <Minus className="h-4 w-4" />
+                </button>
+                <button type="button" aria-label={`Más calorías el ${d.toLowerCase()}`} className="border-border flex h-11 w-11 items-center justify-center border" onClick={() => bumpWeekday(i, WEEKDAY_STEP)}>
+                  <Plus className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground mt-2 text-[11px]">Las calorías extra de un día van a carbohidratos y grasa; la proteína no cambia.</p>
+        </details>
       </SystemWindow>
 
       <SystemWindow title="Comidas visibles" scan={false}>
@@ -214,6 +400,20 @@ export function ProfilePage() {
           (licencia ODbL).
         </p>
       </SystemWindow>
+
+      {dirty && (
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg px-4 pb-2">
+          <div className="system-window flex items-center gap-2 px-4 py-2">
+            <span className="min-w-0 flex-1 text-sm">Cambios sin guardar</span>
+            <button type="button" className="btn-ghost min-h-11 px-3 text-sm" onClick={() => setP(data)}>
+              Descartar
+            </button>
+            <button type="button" className="btn-primary min-h-11 px-4 text-sm" onClick={submit} disabled={save.isPending}>
+              Guardar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

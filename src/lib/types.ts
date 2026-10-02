@@ -135,10 +135,20 @@ export interface Profile {
   weightKg: number;
   activity: Activity;
   goal: Goal;
-  /** Porcentaje de déficit/superávit sobre el TDEE (0-30). */
-  adjustPct: number;
+  /** Ritmo de cambio de peso en kg/semana (magnitud; el signo lo da el objetivo). */
+  rateKgWeek: number;
   proteinPerKg: number;
   fatPct: number;
+  /** % de grasa corporal (a mano o estimado con las medidas). Si existe, el basal usa la masa magra. */
+  bodyFatPct?: number | undefined;
+  neckCm?: number | undefined;
+  waistCm?: number | undefined;
+  hipCm?: number | undefined;
+  targetWeightKg?: number | undefined;
+  /** Gasto diario medido con el diario y el peso; sustituye al de la fórmula. */
+  tdeeOverride?: number | undefined;
+  /** Ajuste de kcal por día de la semana (7 valores, lunes primero). */
+  weekdayKcal?: number[] | undefined;
 }
 
 export interface Settings {

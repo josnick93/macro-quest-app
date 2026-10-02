@@ -6,7 +6,7 @@ App web (PWA) para registrar calorías y macros con estética RPG: misiones diar
 - Alimentos propios, favoritos y recientes
 - Recetas: ingredientes en crudo + peso final → macros por 100 g
 - Progreso: peso corporal, medias de 7 días, XP y racha
-- Perfil: objetivos calculados (Mifflin-St Jeor), exportar/importar datos
+- Perfil: plan de definición, mantenimiento o volumen según tus medidas (ritmo en kg/semana, % de grasa por medidas, peso objetivo con plazo, ajuste por día de la semana, gasto real calculado con tu diario y tu peso), exportar/importar datos
 
 **Stack:** Vite · React 19 · TypeScript · Tailwind v4 · TanStack Query · Recharts · ZXing (wasm)
 

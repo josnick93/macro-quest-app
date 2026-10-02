@@ -18,7 +18,13 @@ export function addDaysISO(iso: string, days: number): string {
   return toISODate(date);
 }
 
-export const formatLongDate = (iso: string) =>
+/** Día de la semana con lunes = 0. */
+export const weekdayIndex = (iso: string): number => (parseISO(iso).getDay() + 6) % 7;
+
+/** Días naturales de `from` a `to` (negativo si `to` es anterior). */
+export const diffDays = (from: string, to: string): number => Math.round((parseISO(to).getTime() - parseISO(from).getTime()) / 86_400_000);
+
+export const formatLongDate =(iso: string) =>
   parseISO(iso).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 
 export const formatShortDate = (iso: string) =>

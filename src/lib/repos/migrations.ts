@@ -14,12 +14,13 @@ import {
   type Settings,
   type WeightLog,
 } from "../types";
+import { formulaTDEE, KCAL_PER_KG } from "../nutrition";
 
 /**
  * Versión del esquema de datos. Si cambia la forma de algo guardado:
  * sube este número y añade un paso en MIGRATIONS. Nunca se pierden datos.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const LEGACY_PREFIX = "sysnutri:";
 
@@ -30,7 +31,7 @@ export const DEFAULT_PROFILE: Profile = {
   weightKg: 80,
   activity: "moderado",
   goal: "perder",
-  adjustPct: 15,
+  rateKgWeek: 0.4,
   proteinPerKg: 2,
   fatPct: 25,
 };
@@ -42,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = { hiddenMeals: [] };
  * Todos los datos del usuario. Es también el formato de exportación.
  * v2: `foods` guarda todos los alimentos conocidos (propios y de OFF usados/corregidos);
  * favoritos son ids; recientes y frecuentes se derivan del diario.
+ * v3: el perfil guarda el ritmo en kg/semana (antes % del gasto) y medidas corporales opcionales.
  */
 export interface Snapshot {
   diary: DiaryEntry[];
@@ -212,20 +214,33 @@ function note(v: unknown, now: string): DayNote | null {
   return { date: v.date, text: v.text, updatedAt: str(v.updatedAt) ? v.updatedAt : now };
 }
 
-function profile(v: unknown): Profile {
+/** Perfil de cualquier versión → actual. v2 guardaba el ajuste como % del gasto (`adjustPct`). */
+export function normalizeProfile(v: unknown): Profile {
   if (!isObj(v)) return { ...DEFAULT_PROFILE };
   const d = DEFAULT_PROFILE;
-  return {
+  const p: Profile = {
     sex: v.sex === "mujer" ? "mujer" : v.sex === "hombre" ? "hombre" : d.sex,
     age: finite(v.age, d.age),
     heightCm: finite(v.heightCm, d.heightCm),
     weightKg: finite(v.weightKg, d.weightKg),
     activity: (["sedentario", "ligero", "moderado", "alto", "muy_alto"] as const).find((a) => a === v.activity) ?? d.activity,
     goal: (["perder", "mantener", "ganar"] as const).find((g) => g === v.goal) ?? d.goal,
-    adjustPct: finite(v.adjustPct, d.adjustPct),
+    rateKgWeek: d.rateKgWeek,
     proteinPerKg: finite(v.proteinPerKg, d.proteinPerKg),
     fatPct: finite(v.fatPct, d.fatPct),
   };
+  const rate = optional(v.rateKgWeek);
+  const pct = optional(v.adjustPct);
+  // Mismo déficit/superávit en kcal que daba el porcentaje, expresado en kg/semana.
+  if (rate !== undefined) p.rateKgWeek = rate;
+  else if (pct !== undefined) p.rateKgWeek = Math.round(((formulaTDEE(p) * pct * 7) / 100 / KCAL_PER_KG) * 100) / 100;
+  for (const k of ["bodyFatPct", "neckCm", "waistCm", "hipCm", "targetWeightKg", "tdeeOverride"] as const) {
+    const x = optional(v[k]);
+    if (x) p[k] = x;
+  }
+  const week = arr(v.weekdayKcal);
+  if (week.length === 7 && week.some((x) => finite(x) !== 0)) p.weekdayKcal = week.map((x) => Math.round(finite(x)));
+  return p;
 }
 
 function settings(v: unknown): Settings {
@@ -290,7 +305,7 @@ export function normalizeSnapshot(raw: Obj, now = new Date().toISOString()): Sna
     savedMeals: list(raw.savedMeals, savedMeal, now),
     weights: list(raw.weights, weight, now),
     favorites: [...new Set(favorites)],
-    profile: profile(raw.profile),
+    profile: normalizeProfile(raw.profile),
     game: game(raw.game, diary),
     settings: settings(raw.settings),
   };
@@ -319,6 +334,7 @@ export function fromLegacy(get: (key: string) => unknown, now = new Date().toISO
 /**
  * Pasos de migración entre versiones del formato de exportación. Índice = versión de origen.
  * v1 → v2 no necesita paso: normalizeSnapshot acepta ambas formas (recientes/favoritos como objetos o ids).
+ * v2 → v3 tampoco: normalizeProfile convierte `adjustPct` en `rateKgWeek`.
  */
 const MIGRATIONS: Record<number, (d: Obj) => Obj> = {};
 

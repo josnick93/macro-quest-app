@@ -8,7 +8,7 @@ import { XPBar } from "@/components/XPBar";
 import { addDaysISO, formatShortDate } from "@/lib/date";
 import { currentStreak } from "@/lib/xp";
 import { totalsFor } from "@/lib/nutrition";
-import { useDiaryRange, useGame, useRemoveWeight, useSaveWeight, useTargets, useToday, useWeights } from "@/lib/hooks";
+import { useDiaryRange, useGame, useProfile, useRemoveWeight, useSaveProfile, useSaveWeight, useTargets, useToday, useWeights } from "@/lib/hooks";
 
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false } as const;
 const tip = {
@@ -24,6 +24,8 @@ export function ProgressPage() {
   const { data: game } = useGame();
   const targets = useTargets();
   const saveWeight = useSaveWeight();
+  const { data: profile, isFetched: profileReady } = useProfile();
+  const saveProfile = useSaveProfile();
   const removeWeight = useRemoveWeight();
   const [open, setOpen] = useState(false);
   const [wDate, setWDate] = useState(today);
@@ -48,6 +50,8 @@ export function ProgressPage() {
     const v = parseFloat(kg.replace(",", "."));
     if (!v || v < 20 || v > 400) return toast.error("Peso no válido");
     await saveWeight.mutateAsync({ date: wDate, kg: v });
+    // El pesaje más reciente es el peso del perfil: los objetivos se recalculan con él.
+    if (profileReady && (!last || wDate >= last.date) && v !== profile.weightKg) await saveProfile.mutateAsync({ ...profile, weightKg: v });
     toast.success("Peso registrado");
     setOpen(false);
     setKg("");

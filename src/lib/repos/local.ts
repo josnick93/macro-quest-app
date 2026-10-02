@@ -10,7 +10,7 @@ import type {
   WeightRepository,
 } from "./types";
 import { DATA_STORES, req, run, tombstone, untombstone, writeSnapshot, type StoreName } from "./idb";
-import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS, type Snapshot } from "./migrations";
+import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS, normalizeProfile, type Snapshot } from "./migrations";
 
 export { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS };
 
@@ -193,7 +193,7 @@ class IdbRecipeRepository implements RecipeRepository {
 
 class IdbProfileRepository implements ProfileRepository {
   async getProfile() {
-    return { ...DEFAULT_PROFILE, ...(await getKv<Partial<Profile>>("profile", {})) };
+    return normalizeProfile(await getKv<unknown>("profile", undefined));
   }
   saveProfile(profile: Profile) {
     return setKv("profile", profile);
@@ -243,7 +243,7 @@ class IdbDataRepository implements DataRepository {
         all<SavedMeal>("savedMeals"),
         all<WeightLog>("weights"),
         kv<string[]>("favorites", []),
-        kv<Partial<Profile>>("profile", {}),
+        kv<unknown>("profile", undefined),
         kv<Partial<GameState>>("game", {}),
         kv<Partial<Settings>>("settings", {}),
       ]);
@@ -255,7 +255,7 @@ class IdbDataRepository implements DataRepository {
         savedMeals,
         weights,
         favorites,
-        profile: { ...DEFAULT_PROFILE, ...profile },
+        profile: normalizeProfile(profile),
         game: { ...DEFAULT_GAME, ...game },
         settings: { ...DEFAULT_SETTINGS, ...settings },
       };
