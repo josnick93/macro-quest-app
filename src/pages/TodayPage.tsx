@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarSearch, CopyPlus, MoreHorizontal, Plus, Zap } from "lucide-react";
+import { CalendarSearch, CopyPlus, MoreHorizontal, Plus, Shield, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { SystemWindow } from "@/components/SystemWindow";
@@ -21,7 +21,7 @@ import { MicroList } from "@/components/MicroList";
 import { defaultMeal, mealLabel } from "@/components/MealSelect";
 import { MEALS, type DiaryEntry, type MealType, type NewEntry } from "@/lib/types";
 import { entryMacros, microTotals, totalsFor } from "@/lib/nutrition";
-import { currentStreak, dailyQuests } from "@/lib/xp";
+import { dailyQuests, shieldedStreak } from "@/lib/xp";
 import { copyEntries, quickEntry } from "@/lib/diary";
 import { uid } from "@/lib/repos/local";
 import { addDaysISO, isISODate, relativeDayLabel } from "@/lib/date";
@@ -29,6 +29,8 @@ import {
   useAddEntries,
   useDay,
   useGame,
+  useGameExtras,
+  type GameRewards,
   useProfile,
   useProfileSet,
   usePutEntries,
@@ -79,8 +81,21 @@ export function TodayPage() {
   const quests = dailyQuests(entries, totals, targets);
   const isFuture = date > today;
 
+  const { weekly, extras } = useGameExtras(today);
+  const { streak, shieldReady } = shieldedStreak(game.activeDays, today);
+
+  const announce = ({ weeklyDone, unlocked }: GameRewards) => {
+    for (const q of weeklyDone) toast.success(`Misión semanal completada: ${q.label}`, { description: `+${q.xp} XP` });
+    // La primera vez pueden salir varios de golpe (lo ya conseguido antes de que existieran los logros).
+    if (unlocked.length > 2) {
+      toast.success(`${unlocked.length} logros desbloqueados`, { description: "Míralos en Progreso", duration: 8000 });
+    } else {
+      for (const a of unlocked) toast.success(`Logro desbloqueado: ${a.title}`, { description: `${a.description} · +${a.xp} XP`, duration: 8000 });
+    }
+  };
+
   // Solo con datos reales cargados, y nunca XP por días futuros.
-  useXpSync(date, entries, targets, dayQ.isFetched && profileQ.isFetched && !isFuture, setLevelUp);
+  useXpSync(date, entries, targets, dayQ.isFetched && profileQ.isFetched && !isFuture, setLevelUp, today, extras, announce);
 
   const addWithUndo = async (list: NewEntry[], message: string) => {
     if (list.length === 0) return;
@@ -114,7 +129,7 @@ export function TodayPage() {
     <div className="space-y-4">
       {levelUp && <LevelUpWindow level={levelUp} onClose={() => setLevelUp(null)} />}
 
-      <XPBar xp={game.xp} streak={currentStreak(game.activeDays, today)} />
+      <XPBar xp={game.xp} activeDays={game.activeDays} today={today} />
 
       <DatePager date={date} today={today} onChange={setDate} />
       {date !== today && (
@@ -149,6 +164,24 @@ export function TodayPage() {
               <QuestItem key={q.id} quest={q} />
             ))}
           </ul>
+        </SystemWindow>
+      )}
+
+      {date === today && (
+        <SystemWindow title="Misiones de la semana" scan={false}>
+          <ul className="divide-border/40 divide-y">
+            {weekly.map((q) => (
+              <QuestItem key={q.id} quest={q} />
+            ))}
+          </ul>
+          {streak > 0 && (
+            <p className="text-muted-foreground mt-2 flex items-start gap-2 text-[11px]">
+              <Shield className={shieldReady ? "text-primary h-3.5 w-3.5 shrink-0" : "h-3.5 w-3.5 shrink-0 opacity-50"} aria-hidden="true" />
+              {shieldReady
+                ? "Escudo de racha listo: si un día de esta semana no registras, la racha sigue."
+                : "El escudo ha protegido tu racha esta semana. Se recarga el lunes."}
+            </p>
+          )}
         </SystemWindow>
       )}
 

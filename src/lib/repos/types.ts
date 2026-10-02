@@ -28,6 +28,8 @@ export interface SavedMealRepository {
 export interface DiaryRepository {
   listByDate(date: string): Promise<DiaryEntry[]>;
   listRange(from: string, to: string): Promise<DiaryEntry[]>;
+  /** Entradas del diario en total. */
+  count(): Promise<number>;
   add(entries: NewEntry[]): Promise<DiaryEntry[]>;
   /** Actualiza o restaura (deshacer) entradas completas. */
   put(entries: DiaryEntry[]): Promise<void>;

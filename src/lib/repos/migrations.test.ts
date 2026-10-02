@@ -212,6 +212,6 @@ describe("registros llegados de la sincronización", () => {
   it("ajustes, favoritos y juego se validan igual", () => {
     expect(normalizeSettings({ hiddenMeals: ["cena", "inventada"] })).toEqual({ hiddenMeals: ["cena"] });
     expect(normalizeFavorites(["a", "a", 3, "", "b"])).toEqual(["a", "b"]);
-    expect(normalizeGame({ xp: -5, awarded: ["k", 1], activeDays: ["2026-10-02", "mal"] })).toEqual({ xp: 0, activeDays: ["2026-10-02"], awarded: ["k"], history: [] });
+    expect(normalizeGame({ xp: -5, awarded: ["k", 1], activeDays: ["2026-10-02", "mal"] })).toEqual({ xp: 0, activeDays: ["2026-10-02"], awarded: ["k"], history: [], achievements: {} });
   });
 });
