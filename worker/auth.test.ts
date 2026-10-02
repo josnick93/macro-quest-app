@@ -51,7 +51,7 @@ async function signIn(token = idToken()): Promise<string> {
   const start = await handleAuth(get("login"), env(), google(null));
   const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
   const res = await handleAuth(get(`callback?code=abc&state=${state}`, cookieOf(start, "__Host-mq_oauth")!), env(), google(token));
-  expect(res.headers.get("location")).toBe("/perfil?login=ok");
+  expect(res.headers.get("location")).toBe("/?login=ok");
   return cookieOf(res, "__Host-mq_session")!;
 }
 
@@ -99,7 +99,7 @@ describe("inicio de sesión", () => {
     const session = cookieOf(res, "__Host-mq_session")!;
     expect(await (await handleAuth(get("me", session), env(), google(null))).json()).toEqual({
       enabled: true,
-      user: { email: "ana@example.com", name: "Ana Muñoz" },
+      user: { id: "google-123", email: "ana@example.com", name: "Ana Muñoz" },
     });
     // En la base solo está el hash del token, nunca el token.
     const token = session.split("=")[1]!;
@@ -119,17 +119,17 @@ describe("inicio de sesión", () => {
     const start = await handleAuth(get("login"), env(), google(null));
     const stateCookie = cookieOf(start, "__Host-mq_oauth")!;
     const bad = await handleAuth(get("callback?code=abc&state=otro", stateCookie), env(), google(idToken()));
-    expect(bad.headers.get("location")).toBe("/perfil?login=error&motivo=estado");
+    expect(bad.headers.get("location")).toBe("/?login=error&motivo=estado");
     const noCookie = await handleAuth(get("callback?code=abc&state=otro"), env(), google(idToken()));
-    expect(noCookie.headers.get("location")).toBe("/perfil?login=error&motivo=sin_cookie");
+    expect(noCookie.headers.get("location")).toBe("/?login=error&motivo=sin_cookie");
     expect(cookieOf(bad, "__Host-mq_session")).toBeNull();
     const cancelled = await handleAuth(get("callback?error=access_denied", stateCookie), env(), google(idToken()));
-    expect(cancelled.headers.get("location")).toBe("/perfil?login=cancelado");
+    expect(cancelled.headers.get("location")).toBe("/?login=cancelado");
     const state = stateCookie.split("=")[1]!;
     const forged = await handleAuth(get(`callback?code=abc&state=${state}`, stateCookie), env(), google(idToken({ aud: "otra-app" })));
-    expect(forged.headers.get("location")).toBe("/perfil?login=error&motivo=identidad");
+    expect(forged.headers.get("location")).toBe("/?login=error&motivo=identidad");
     const down = await handleAuth(get(`callback?code=abc&state=${state}`, stateCookie), env(), google(null));
-    expect(down.headers.get("location")).toBe("/perfil?login=error&motivo=google_invalid_client");
+    expect(down.headers.get("location")).toBe("/?login=error&motivo=google_invalid_client");
   });
 
   it("una sesión inventada o caducada no vale", async () => {

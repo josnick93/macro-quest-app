@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast, Toaster } from "sonner";
 import { BottomNav } from "@/components/BottomNav";
@@ -10,7 +10,9 @@ import { AddPage } from "@/pages/AddPage";
 import { RecipesPage } from "@/pages/RecipesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { WelcomePage } from "@/pages/WelcomePage";
-import { useProfileSet } from "@/lib/hooks";
+import { LoginPage } from "@/pages/LoginPage";
+import { useProfileSet, useSession } from "@/lib/hooks";
+import { gate, loginMessage, rememberedAccount } from "@/lib/auth";
 import { welcomeSkipped } from "@/lib/welcome";
 import { requestPersistence } from "@/lib/repos/idb";
 
@@ -36,10 +38,30 @@ function NotFound() {
 
 const WELCOME = "/bienvenida";
 
+/** Resultado del login al volver de Google: se muestra una vez y se limpia de la URL. */
+function useLoginResult() {
+  const [params, setParams] = useSearchParams();
+  const result = params.get("login");
+  const motivo = params.get("motivo");
+  useEffect(() => {
+    const msg = loginMessage(result, motivo);
+    if (!msg) return;
+    if (msg.ok) toast.success(msg.text);
+    else toast.info(msg.text, { duration: 15_000 });
+    setParams((p) => (p.delete("login"), p.delete("motivo"), p), { replace: true });
+  }, [result, motivo, setParams]);
+}
+
 function Shell() {
   const { pathname } = useLocation();
   const profileSet = useProfileSet();
+  const session = useSession();
+  useLoginResult();
   const onWelcome = pathname === WELCOME;
+
+  const access = gate(session.data, rememberedAccount());
+  if (access === "loading") return null;
+  if (access === "login") return <LoginPage offline={session.data?.offline === true} onRetry={() => session.refetch()} />;
   // Primera vez: se pide lo mínimo para calcular el objetivo, en vez de enseñar kcal de ejemplo.
   if (profileSet === false && !onWelcome && !welcomeSkipped()) return <Navigate to={WELCOME} replace />;
   return (

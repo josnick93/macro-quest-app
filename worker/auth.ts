@@ -23,7 +23,7 @@ const STATE_SECONDS = 600;
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
 /** Adónde vuelve la app tras el login; `login` le dice qué ha pasado. */
-const AFTER = "/perfil";
+const AFTER = "/";
 
 const enabled = (env: AuthEnv): env is Required<AuthEnv> => !!(env.DB && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 
@@ -167,7 +167,7 @@ export async function handleAuth(request: Request, env: AuthEnv, deps: AuthDeps 
   if (request.method === "GET") {
     if (path === "me") {
       const session = await currentUser(request, env, deps.now());
-      return json({ enabled: true, user: session ? { email: session.user.email, name: session.user.name } : null });
+      return json({ enabled: true, user: session ? { id: session.user.id, email: session.user.email, name: session.user.name } : null });
     }
     if (path === "login") return login(url, env);
     if (path === "callback") return callback(request, url, env, deps);

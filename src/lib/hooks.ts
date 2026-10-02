@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { repos } from "./repos";
-import { deleteAccount, fetchSession, logout, type SessionInfo } from "./auth";
+import { activeAccount, deleteAccount, loadSession, logout, rememberAccount, rememberedAccount, type SessionUser } from "./auth";
 import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS } from "./repos/local";
 import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, Targets, WeightLog } from "./types";
 import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
@@ -214,24 +214,25 @@ export function useTdeeEstimate(): TdeeEstimate {
   return useMemo(() => estimateTdee(kcalByDay(entries), weights.filter((w) => w.date >= from && w.date <= today)), [entries, weights, from, today]);
 }
 
-/** Sesión de Google. Mientras no se sabe (o sin servidor), cuenta como "sin login". */
+/** Sesión de Google. `data` es undefined hasta que el servidor responde (o falla). */
 export function useSession() {
-  return useQuery({
-    queryKey: ["session"],
-    queryFn: fetchSession,
-    initialData: { enabled: false, user: null } as SessionInfo,
-    initialDataUpdatedAt: 0,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  return useQuery({ queryKey: ["session"], queryFn: loadSession, staleTime: 60_000, refetchOnWindowFocus: false, retry: false });
 }
+/** Cuenta en uso: la de la sesión o, sin conexión, la última que entró en este dispositivo. */
+export function useAccount(): SessionUser | null {
+  return activeAccount(useSession().data, rememberedAccount());
+}
+const forgetSession = (qc: QueryClient) => {
+  rememberAccount(null);
+  return qc.invalidateQueries({ queryKey: ["session"] });
+};
 export function useLogout() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: logout, onSuccess: () => qc.invalidateQueries({ queryKey: ["session"] }) });
+  return useMutation({ mutationFn: logout, onSuccess: () => forgetSession(qc) });
 }
 export function useDeleteAccount() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: deleteAccount, onSuccess: () => qc.invalidateQueries({ queryKey: ["session"] }) });
+  return useMutation({ mutationFn: deleteAccount, onSuccess: () => forgetSession(qc) });
 }
 
 export function useGame() {
