@@ -33,12 +33,15 @@ src/
     nutrition.ts  Basal (Mifflin / Katch-McArdle con % de grasa), gasto, objetivos por día, % grasa (método Marina), macros de recetas
     goals.ts      Escenarios definición/mantenimiento/volumen, avisos de salud, plazo al peso objetivo, gasto real (TDEE adaptativo)
     xp.ts         Misiones, XP, niveles, rachas
-    off.ts        Cliente Open Food Facts (ODbL). La búsqueda da 503 intermitentes y limita ~10/min: reintentos + caché + mínimo 3 letras
+    off.ts        Cliente Open Food Facts (ODbL): pregunta a /api/off/* (worker) y, si no existe o falla, a OFF directo. Mínimo 3 letras
+    offApi.ts     URLs y validación de OFF, compartidas entre la app y el worker
     hooks.ts      Hooks React Query sobre los repos
     diary.ts      Copiar entradas, añadido rápido
     foods.ts      Recientes/frecuentes/última cantidad (derivados del diario), raciones, búsqueda unificada
     repos/        Capa de datos: types.ts (interfaces), local.ts (IndexedDB), idb.ts (envoltorio IndexedDB),
                   migrations.ts (versión de esquema, normalización, import/export), index.ts (selector)
+worker/         Cloudflare Worker: /api/off/search y /api/off/product/:código (reintentos ante 503, caché de Cloudflare,
+                España primero y luego todo el catálogo). Lo demás lo sirve desde dist. Tests en worker/index.test.ts
 ```
 
 ## Arquitectura de datos
@@ -57,11 +60,12 @@ src/
 - `npm run dev` · `npm run dev -- --host` (probar en el móvil por la red local)
 - `NO_SSL=1 npm run dev` (sin HTTPS; para navegadores que rechazan el certificado autofirmado)
 - `npm run build` (tsc + vite build) · `npm run preview`
+- `npm run build && npx wrangler dev` (app compilada + worker en local, puerto 8787; ahí el service worker no se registra, en producción sí)
 - `npm test` (Vitest; tests de la lógica pura de `lib/`: nutrición, objetivos, XP, diario, alimentos, migraciones)
 
 ## Notas
 - PWA: `sw.js` se genera al compilar (plugin en `vite.config.ts` + `src/sw.template.js`, sin dependencias) y precachea todos los archivos de la versión. Solo en producción; probar con `npm run build && NO_SSL=1 npm run preview`.
 - Preferencias por dispositivo (no son datos del usuario, no se exportan): localStorage `mq:*` (escaneo continuo, fecha de la última copia y del último aviso).
 - Escáner: la cámara en directo en iOS requiere HTTPS; por http en la red local funciona el botón "Hacer foto".
-- Deploy: Cloudflare Workers con archivos estáticos (`wrangler.jsonc`: sirve `dist`, fallback SPA con `not_found_handling`). Build `npm run build`, deploy `npx wrangler deploy`. No usar `_redirects` con `/* /index.html 200`: en Workers se rechaza por bucle.
+- Deploy: Cloudflare Workers (`wrangler.jsonc`: worker en `worker/index.ts` para `/api/*`, sirve `dist`, fallback SPA con `not_found_handling`). Build `npm run build`, deploy `npx wrangler deploy`. No usar `_redirects` con `/* /index.html 200`: en Workers se rechaza por bucle.
 - Backend futuro: Go o PocketBase en una Orange Pi expuesta con Cloudflare Tunnel.

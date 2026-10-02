@@ -55,6 +55,7 @@ Abre la URL `Network: http://192.168.x.x:5173` en el móvil.
    - Build command: `npm run build`
    - Deploy command: `npx wrangler deploy`
 3. La configuración del despliegue está en `wrangler.jsonc` (sirve `dist` y devuelve `index.html` en cualquier ruta de la app).
+4. `worker/index.ts` atiende `/api/off/*`: hace de intermediario con Open Food Facts con reintentos y caché (1 día las búsquedas, 7 días los productos, 1 hora los «no encontrado»). En `npm run dev` no existe y la app llama a Open Food Facts directamente.
 
 Cada `git push` a `main` vuelve a desplegar automáticamente. Para validar la configuración en local: `npm run build && npx wrangler deploy --dry-run`.
 
