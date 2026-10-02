@@ -3,7 +3,7 @@
  * El navegador nunca ve el secreto de Google ni el token de sesión (cookie HttpOnly).
  */
 import { cookie, json, readCookie, redirect } from "./http";
-import { createSession, deleteSession, deleteUser, ensureSchema, sessionUser, upsertUser, type Database, type User } from "./store";
+import { createSession, deleteSession, deleteUser, ensureSchema, sessionUser, upsertUser, type Account, type Database, type User } from "./store";
 
 export interface AuthEnv {
   DB?: Database;
@@ -23,9 +23,9 @@ const STATE_SECONDS = 600;
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
 /** Adónde vuelve la app tras el login; `login` le dice qué ha pasado. */
-const AFTER = "/perfil";
+const AFTER = "/";
 
-const enabled = (env: AuthEnv): env is Required<AuthEnv> => !!(env.DB && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+export const enabled = (env: AuthEnv): env is Required<AuthEnv> => !!(env.DB && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 
 function randomToken(bytes = 32): string {
   const raw = crypto.getRandomValues(new Uint8Array(bytes));
@@ -63,7 +63,8 @@ export function userFromIdToken(idToken: string, clientId: string, nowMs: number
 
 const callbackUrl = (url: URL) => `${url.origin}/api/auth/callback`;
 
-async function currentUser(request: Request, env: Required<AuthEnv>, nowMs: number): Promise<{ user: User; tokenHash: string } | null> {
+/** Usuario de la sesión de esta petición, si la cookie es válida. */
+export async function currentUser(request: Request, env: Required<AuthEnv>, nowMs: number): Promise<{ user: Account; tokenHash: string } | null> {
   const token = readCookie(request, SESSION_COOKIE);
   if (!token) return null;
   await ensureSchema(env.DB);
@@ -167,7 +168,7 @@ export async function handleAuth(request: Request, env: AuthEnv, deps: AuthDeps 
   if (request.method === "GET") {
     if (path === "me") {
       const session = await currentUser(request, env, deps.now());
-      return json({ enabled: true, user: session ? { email: session.user.email, name: session.user.name } : null });
+      return json({ enabled: true, user: session ? { id: session.user.id, email: session.user.email, name: session.user.name } : null });
     }
     if (path === "login") return login(url, env);
     if (path === "callback") return callback(request, url, env, deps);

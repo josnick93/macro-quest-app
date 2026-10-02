@@ -272,6 +272,44 @@ const list = <T>(v: unknown, fn: (x: unknown, now: string) => T | null, now: str
     return r ? [r] : [];
   });
 
+/** Almacenes de registros con clave propia (id o fecha). */
+export type RecordStore = "diary" | "notes" | "foods" | "recipes" | "savedMeals" | "weights";
+
+/** Valida un registro suelto llegado de fuera (sincronización); null si está corrupto. */
+export function normalizeRecord(store: RecordStore, raw: unknown, now = new Date().toISOString()): { key: string; value: object } | null {
+  switch (store) {
+    case "diary": {
+      const e = entry(raw, now);
+      return e ? { key: e.id, value: e.createdAt ? e : { ...e, createdAt: e.updatedAt } } : null;
+    }
+    case "notes": {
+      const n = note(raw, now);
+      return n ? { key: n.date, value: n } : null;
+    }
+    case "foods": {
+      const f = food(raw, now);
+      return f && f.source !== "recipe" ? { key: f.id, value: f } : null;
+    }
+    case "recipes": {
+      const r = recipe(raw, now);
+      return r ? { key: r.id, value: r } : null;
+    }
+    case "savedMeals": {
+      const m = savedMeal(raw, now);
+      return m ? { key: m.id, value: m } : null;
+    }
+    case "weights": {
+      const w = weight(raw, now);
+      return w ? { key: w.date, value: w } : null;
+    }
+  }
+}
+
+/** Ajustes, juego y favoritos llegados de fuera, validados. */
+export const normalizeSettings = (v: unknown): Settings => settings(v);
+export const normalizeGame = (v: unknown): GameState => game(v, []);
+export const normalizeFavorites = (v: unknown): string[] => [...new Set(arr(v).filter(str))];
+
 /** Normaliza datos de cualquier procedencia al esquema actual, descartando solo registros corruptos. */
 export function normalizeSnapshot(raw: Obj, now = new Date().toISOString()): Snapshot {
   const base = Date.parse(now) || 0;

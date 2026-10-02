@@ -3,11 +3,12 @@
  * - Reintenta los 503 intermitentes de OFF, que el navegador ve como fallo de red.
  * - Guarda las respuestas en la caché de Cloudflare: una búsqueda repetida no vuelve a OFF.
  * - Si en España no hay resultados, busca en todo el catálogo.
- * También atiende el login (/api/auth/*, ver auth.ts).
+ * También atiende el login (/api/auth/*, ver auth.ts) y la sincronización de datos (/api/sync, ver sync.ts).
  * Todo lo que no sea /api/* se sirve desde los archivos estáticos de la app.
  */
 import { handleAuth, type AuthEnv } from "./auth";
 import { json } from "./http";
+import { handleSync } from "./sync";
 import { isBarcode, MAX_REMOTE_QUERY, MIN_REMOTE_QUERY, normalizeQuery, productUrl, searchUrl, type SearchScope } from "../src/lib/offApi";
 
 interface Env extends AuthEnv {
@@ -92,6 +93,14 @@ export default {
       } catch (e) {
         console.error("auth", e);
         return json({ error: "Error en el inicio de sesión" }, 500);
+      }
+    }
+    if (url.pathname === "/api/sync") {
+      try {
+        return await handleSync(request, env);
+      } catch (e) {
+        console.error("sync", e);
+        return json({ error: "Error al sincronizar" }, 500);
       }
     }
     if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { repos } from "./repos";
-import { deleteAccount, fetchSession, logout, type SessionInfo } from "./auth";
+import { onDirty } from "./repos/idb";
+import { SyncError } from "./repos/sync";
+import { setSyncStatus } from "./syncStatus";
+import { activeAccount, deleteAccount, loadSession, logout, rememberAccount, rememberedAccount, type SessionUser } from "./auth";
 import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS } from "./repos/local";
 import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, Targets, WeightLog } from "./types";
 import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
@@ -214,24 +217,117 @@ export function useTdeeEstimate(): TdeeEstimate {
   return useMemo(() => estimateTdee(kcalByDay(entries), weights.filter((w) => w.date >= from && w.date <= today)), [entries, weights, from, today]);
 }
 
-/** Sesión de Google. Mientras no se sabe (o sin servidor), cuenta como "sin login". */
+/** Sesión de Google. `data` es undefined hasta que el servidor responde (o falla). */
 export function useSession() {
-  return useQuery({
-    queryKey: ["session"],
-    queryFn: fetchSession,
-    initialData: { enabled: false, user: null } as SessionInfo,
-    initialDataUpdatedAt: 0,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  return useQuery({ queryKey: ["session"], queryFn: loadSession, staleTime: 60_000, refetchOnWindowFocus: false, retry: false });
 }
+/** Cuenta en uso: la de la sesión o, sin conexión, la última que entró en este dispositivo. */
+export function useAccount(): SessionUser | null {
+  return activeAccount(useSession().data, rememberedAccount());
+}
+const forgetSession = (qc: QueryClient) => {
+  rememberAccount(null);
+  return qc.invalidateQueries({ queryKey: ["session"] });
+};
 export function useLogout() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: logout, onSuccess: () => qc.invalidateQueries({ queryKey: ["session"] }) });
+  return useMutation({ mutationFn: logout, onSuccess: () => forgetSession(qc) });
 }
 export function useDeleteAccount() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: deleteAccount, onSuccess: () => qc.invalidateQueries({ queryKey: ["session"] }) });
+  return useMutation({
+    mutationFn: async () => {
+      await deleteAccount();
+      // La copia del servidor ya no existe: si vuelve a entrar, se sube todo de nuevo.
+      await repos.sync.forget();
+    },
+    onSuccess: () => forgetSession(qc),
+  });
+}
+
+// ---------- copia en la nube ----------
+
+/** De qué cuenta son los datos de este dispositivo (null: de ninguna todavía). */
+export function useSyncOwner() {
+  return useQuery({ queryKey: ["sync", "owner"], queryFn: () => repos.sync.owner(), ...opts });
+}
+export function useSyncPending(): number {
+  return useQuery({ queryKey: ["sync", "pending"], queryFn: () => repos.sync.pending(), initialData: 0, ...opts }).data;
+}
+/** Borra los datos de este dispositivo para usarlo con otra cuenta. */
+export function useWipeLocal() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => repos.sync.wipe(), onSuccess: () => qc.invalidateQueries() });
+}
+
+/** Espera tras el último cambio local antes de subirlo. */
+const SYNC_DEBOUNCE_MS = 2500;
+/** Al volver a la app solo se sincroniza si ha pasado este tiempo. */
+const SYNC_ON_RETURN_MS = 60_000;
+
+let syncTrigger: (() => void) | null = null;
+/** Sincroniza ahora (botón de la ventana de la cuenta). */
+export const syncNow = () => syncTrigger?.();
+
+/**
+ * Mantiene la copia en la nube: al abrir, tras cada cambio local, al volver a la app y al recuperar la conexión.
+ * Los fallos no molestan: lo pendiente se queda en la cola y se reintenta.
+ */
+export function useSyncRunner(account: SessionUser | null, active: boolean) {
+  const qc = useQueryClient();
+  const id = account?.id;
+  const accountRef = useRef(account);
+  accountRef.current = account;
+
+  useEffect(() => {
+    if (!id || !active) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastRun = 0;
+
+    const runNow = async () => {
+      clearTimeout(timer);
+      timer = undefined;
+      const user = accountRef.current;
+      if (disposed || !user) return;
+      setSyncStatus({ state: "syncing" });
+      try {
+        const result = await repos.sync.run(user);
+        lastRun = Date.now();
+        // Primero los datos y después el estado: quien espera a la primera sincronización ve ya el perfil bajado.
+        if (result.pulled > 0) await qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" && q.queryKey[0] !== "sync" });
+        setSyncStatus({ state: "idle", lastAt: new Date().toISOString(), error: null });
+      } catch (e) {
+        const code = e instanceof SyncError ? e.code : "server";
+        if (code !== "network") console.error("Sincronización", e);
+        if (code === "unauthorized") qc.invalidateQueries({ queryKey: ["session"] });
+        setSyncStatus({ state: "error", error: code });
+      }
+      if (!disposed) qc.invalidateQueries({ queryKey: ["sync"] });
+    };
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(runNow, SYNC_DEBOUNCE_MS);
+    };
+    const onVisibility = () => {
+      // Al salir se sube lo pendiente sin esperar; al volver se baja lo que haya de otros dispositivos.
+      if (document.visibilityState === "hidden" ? timer !== undefined : Date.now() - lastRun > SYNC_ON_RETURN_MS) runNow();
+    };
+
+    onDirty(schedule);
+    syncTrigger = runNow;
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", runNow);
+    runNow();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      onDirty(null);
+      syncTrigger = null;
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", runNow);
+    };
+  }, [id, active, qc]);
 }
 
 export function useGame() {
