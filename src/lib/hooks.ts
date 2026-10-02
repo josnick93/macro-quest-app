@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { repos } from "./repos";
 import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS } from "./repos/local";
-import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, Settings, Targets, WeightLog } from "./types";
+import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, Targets, WeightLog } from "./types";
+import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
 import { calcTargets, totalsFor } from "./nutrition";
 import { dailyQuests, syncDayXp } from "./xp";
-import { msUntilMidnight, todayISO } from "./date";
+import { addDaysISO, msUntilMidnight, todayISO } from "./date";
 
 const opts = { staleTime: 0, refetchOnWindowFocus: false } as const;
 
@@ -91,35 +92,84 @@ export function useSaveNote() {
   });
 }
 
-export function useRecents() {
-  return useQuery({ queryKey: ["recents"], queryFn: () => repos.foods.getRecents(), initialData: [] as Food[], ...opts });
+export function useFoods() {
+  return useQuery({ queryKey: ["foods"], queryFn: () => repos.foods.list(), initialData: [] as Food[], ...opts });
 }
-export function useFavorites() {
-  return useQuery({ queryKey: ["favorites"], queryFn: () => repos.foods.getFavorites(), initialData: [] as Food[], ...opts });
-}
-export function useCustomFoods() {
-  return useQuery({ queryKey: ["custom"], queryFn: () => repos.foods.listCustom(), initialData: [] as Food[], ...opts });
+export function useFavoriteIds() {
+  return useQuery({ queryKey: ["favorites"], queryFn: () => repos.foods.getFavorites(), initialData: [] as string[], ...opts });
 }
 const invalidateFoods = (qc: QueryClient) => {
-  qc.invalidateQueries({ queryKey: ["recents"] });
+  qc.invalidateQueries({ queryKey: ["foods"] });
   qc.invalidateQueries({ queryKey: ["favorites"] });
-  qc.invalidateQueries({ queryKey: ["custom"] });
 };
 export function useToggleFavorite() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (f: Food) => repos.foods.toggleFavorite(f), onSuccess: () => invalidateFoods(qc) });
 }
-export function useAddRecent() {
+/** Crear/editar un alimento propio o corregir uno de OFF. */
+export function useSaveFood() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (f: Food) => repos.foods.addRecent(f), onSuccess: () => invalidateFoods(qc) });
+  return useMutation({ mutationFn: (f: Food) => repos.foods.save(f), onSuccess: () => invalidateFoods(qc) });
 }
-export function useSaveCustomFood() {
+/** Guardar en el historial un alimento de OFF que se acaba de usar. */
+export function useRememberFood() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (f: Food) => repos.foods.saveCustom(f), onSuccess: () => invalidateFoods(qc) });
+  return useMutation({ mutationFn: (f: Food) => repos.foods.remember(f), onSuccess: () => invalidateFoods(qc) });
 }
-export function useRemoveCustomFood() {
+export function useRemoveFood() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (id: string) => repos.foods.removeCustom(id), onSuccess: () => invalidateFoods(qc) });
+  return useMutation({ mutationFn: (id: string) => repos.foods.remove(id), onSuccess: () => invalidateFoods(qc) });
+}
+
+export function useSavedMeals() {
+  return useQuery({ queryKey: ["savedMeals"], queryFn: () => repos.savedMeals.list(), initialData: [] as SavedMeal[], ...opts });
+}
+export function useSaveSavedMeal() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (m: SavedMeal) => repos.savedMeals.save(m), onSuccess: () => qc.invalidateQueries({ queryKey: ["savedMeals"] }) });
+}
+export function useRemoveSavedMeal() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (id: string) => repos.savedMeals.remove(id), onSuccess: () => qc.invalidateQueries({ queryKey: ["savedMeals"] }) });
+}
+
+/** Ventana del diario usada para recientes, frecuentes y última cantidad. */
+const STATS_DAYS = 90;
+
+export interface FoodLibrary {
+  /** Todos los alimentos locales resolubles por id (almacén + recetas). */
+  known: Map<string, Food>;
+  stats: FoodStats;
+  recents: Food[];
+  frequent: Food[];
+  favorites: Food[];
+  mine: Food[];
+  recipes: Food[];
+  /** Lo que se busca en local: almacén + recetas. */
+  local: Food[];
+}
+
+export function useFoodLibrary(): FoodLibrary {
+  const today = useToday();
+  const { data: foods } = useFoods();
+  const { data: recipes } = useRecipes();
+  const { data: favIds } = useFavoriteIds();
+  const { data: entries } = useDiaryRange(addDaysISO(today, -STATS_DAYS), today);
+  return useMemo(() => {
+    const known = knownFoods(foods, recipes);
+    const stats = foodStats(entries);
+    const recipeFoods = recipes.map(recipeAsFood);
+    return {
+      known,
+      stats,
+      recents: resolveFoods(stats.recents.slice(0, 30), known, stats.lastEntry),
+      frequent: resolveFoods(stats.frequent.filter((id) => (stats.count[id] ?? 0) >= 2).slice(0, 30), known, stats.lastEntry),
+      favorites: resolveFoods(favIds, known, stats.lastEntry),
+      mine: foods.filter((f) => f.source === "custom").sort((a, b) => a.name.localeCompare(b.name, "es")),
+      recipes: recipeFoods,
+      local: [...foods, ...recipeFoods],
+    };
+  }, [foods, recipes, favIds, entries]);
 }
 
 export function useRecipes() {

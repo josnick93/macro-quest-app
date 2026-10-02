@@ -1,4 +1,4 @@
-import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, Settings, WeightLog } from "../types";
+import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, WeightLog } from "../types";
 import type {
   DataRepository,
   DiaryRepository,
@@ -6,6 +6,7 @@ import type {
   ProfileRepository,
   RecipeRepository,
   Repositories,
+  SavedMealRepository,
   WeightRepository,
 } from "./types";
 import { DATA_STORES, req, run, tombstone, untombstone, writeSnapshot, type StoreName } from "./idb";
@@ -30,54 +31,79 @@ const setKv = (key: string, value: unknown) => run(["kv"], "readwrite", (tx) => 
 const byCreatedAt = (a: DiaryEntry, b: DiaryEntry) => a.createdAt.localeCompare(b.createdAt);
 
 class IdbFoodRepository implements FoodRepository {
-  getRecents() {
-    return getKv<Food[]>("recents", []);
+  list() {
+    return getAll<Food>("foods");
   }
-  addRecent(food: Food) {
-    return run(["kv"], "readwrite", async (tx) => {
-      const kv = tx.objectStore("kv");
-      const list = ((await req(kv.get("recents"))) as Food[] | undefined) ?? [];
-      kv.put([food, ...list.filter((f) => f.id !== food.id)].slice(0, 30), "recents");
-    });
+  async findByBarcode(barcode: string) {
+    const hits = await run(["foods"], "readonly", (tx) =>
+      req(tx.objectStore("foods").index("barcode").getAll(barcode) as IDBRequest<Food[]>),
+    );
+    // Si hay varios (p. ej. OFF + propio con el mismo código), gana el último editado.
+    return hits.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))[0] ?? null;
   }
-  getFavorites() {
-    return getKv<Food[]>("favorites", []);
-  }
-  toggleFavorite(food: Food) {
-    return run(["kv"], "readwrite", async (tx) => {
-      const kv = tx.objectStore("kv");
-      const list = ((await req(kv.get("favorites"))) as Food[] | undefined) ?? [];
-      const exists = list.some((f) => f.id === food.id);
-      kv.put(exists ? list.filter((f) => f.id !== food.id) : [food, ...list], "favorites");
-      return !exists;
-    });
-  }
-  async listCustom() {
-    const list = await getAll<Food>("foods");
-    return list.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  }
-  saveCustom(food: Food) {
-    const saved: Food = { ...food, custom: true, updatedAt: nowISO() };
-    return run(["foods", "kv", "tombstones"], "readwrite", async (tx) => {
+  save(food: Food) {
+    if (food.source === "recipe") return Promise.resolve();
+    const saved: Food = { ...food, updatedAt: nowISO() };
+    return run(["foods", "tombstones"], "readwrite", (tx) => {
       tx.objectStore("foods").put(saved);
       untombstone(tx, "foods", saved.id);
-      // Mantener coherentes recientes y favoritos
-      const kv = tx.objectStore("kv");
-      for (const key of ["recents", "favorites"]) {
-        const list = ((await req(kv.get(key))) as Food[] | undefined) ?? [];
-        kv.put(list.map((f) => (f.id === saved.id ? saved : f)), key);
-      }
     });
   }
-  removeCustom(id: string) {
+  remember(food: Food) {
+    if (food.source === "recipe") return Promise.resolve();
+    return run(["foods", "tombstones"], "readwrite", async (tx) => {
+      const os = tx.objectStore("foods");
+      const existing = (await req(os.get(food.id))) as Food | undefined;
+      if (existing) return; // nunca pisar una versión local (propia o corregida)
+      os.put({ ...food, updatedAt: nowISO() });
+      untombstone(tx, "foods", food.id);
+    });
+  }
+  remove(id: string) {
     return run(["foods", "kv", "tombstones"], "readwrite", async (tx) => {
       tx.objectStore("foods").delete(id);
       tombstone(tx, "foods", id, nowISO());
       const kv = tx.objectStore("kv");
-      for (const key of ["recents", "favorites"]) {
-        const list = ((await req(kv.get(key))) as Food[] | undefined) ?? [];
-        kv.put(list.filter((f) => f.id !== id), key);
+      const favs = ((await req(kv.get("favorites"))) as string[] | undefined) ?? [];
+      kv.put(favs.filter((f) => f !== id), "favorites");
+    });
+  }
+  getFavorites() {
+    return getKv<string[]>("favorites", []);
+  }
+  toggleFavorite(food: Food) {
+    return run(["foods", "kv", "tombstones"], "readwrite", async (tx) => {
+      const kv = tx.objectStore("kv");
+      const list = ((await req(kv.get("favorites"))) as string[] | undefined) ?? [];
+      const exists = list.includes(food.id);
+      kv.put(exists ? list.filter((id) => id !== food.id) : [food.id, ...list], "favorites");
+      if (!exists && food.source !== "recipe") {
+        const os = tx.objectStore("foods");
+        if (!(await req(os.get(food.id)))) {
+          os.put({ ...food, updatedAt: nowISO() });
+          untombstone(tx, "foods", food.id);
+        }
       }
+      return !exists;
+    });
+  }
+}
+
+class IdbSavedMealRepository implements SavedMealRepository {
+  async list() {
+    const list = await getAll<SavedMeal>("savedMeals");
+    return list.sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }
+  save(meal: SavedMeal) {
+    return run(["savedMeals", "tombstones"], "readwrite", (tx) => {
+      tx.objectStore("savedMeals").put({ ...meal, updatedAt: nowISO() });
+      untombstone(tx, "savedMeals", meal.id);
+    });
+  }
+  remove(id: string) {
+    return run(["savedMeals", "tombstones"], "readwrite", (tx) => {
+      tx.objectStore("savedMeals").delete(id);
+      tombstone(tx, "savedMeals", id, nowISO());
     });
   }
 }
@@ -209,14 +235,14 @@ class IdbDataRepository implements DataRepository {
     return run(DATA_STORES, "readonly", async (tx): Promise<Snapshot> => {
       const all = <T>(s: StoreName) => req(tx.objectStore(s).getAll() as IDBRequest<T[]>);
       const kv = <T>(k: string, fb: T) => req(tx.objectStore("kv").get(k)).then((v) => (v as T | undefined) ?? fb);
-      const [diary, notes, foods, recipes, weights, recents, favorites, profile, game, settings] = await Promise.all([
+      const [diary, notes, foods, recipes, savedMeals, weights, favorites, profile, game, settings] = await Promise.all([
         all<DiaryEntry>("diary"),
         all<DayNote>("notes"),
         all<Food>("foods"),
         all<Recipe>("recipes"),
+        all<SavedMeal>("savedMeals"),
         all<WeightLog>("weights"),
-        kv<Food[]>("recents", []),
-        kv<Food[]>("favorites", []),
+        kv<string[]>("favorites", []),
         kv<Partial<Profile>>("profile", {}),
         kv<Partial<GameState>>("game", {}),
         kv<Partial<Settings>>("settings", {}),
@@ -226,8 +252,8 @@ class IdbDataRepository implements DataRepository {
         notes,
         foods,
         recipes,
+        savedMeals,
         weights,
-        recents,
         favorites,
         profile: { ...DEFAULT_PROFILE, ...profile },
         game: { ...DEFAULT_GAME, ...game },
@@ -247,6 +273,7 @@ export const createLocalRepositories = (): Repositories => ({
   foods: new IdbFoodRepository(),
   diary: new IdbDiaryRepository(),
   recipes: new IdbRecipeRepository(),
+  savedMeals: new IdbSavedMealRepository(),
   profile: new IdbProfileRepository(),
   weights: new IdbWeightRepository(),
   data: new IdbDataRepository(),

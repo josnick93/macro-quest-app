@@ -1,12 +1,12 @@
-import { fromLegacy, LEGACY_PREFIX, SCHEMA_VERSION, type Snapshot } from "./migrations";
+import { fromLegacy, LEGACY_PREFIX, normalizeSnapshot, SCHEMA_VERSION, type Snapshot } from "./migrations";
 
 /** Envoltorio mínimo de IndexedDB (sin dependencias). */
 
 export const DB_NAME = "macro-quest";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
-export type StoreName = "diary" | "notes" | "foods" | "recipes" | "weights" | "kv" | "tombstones";
-export const DATA_STORES: StoreName[] = ["diary", "notes", "foods", "recipes", "weights", "kv", "tombstones"];
+export type StoreName = "diary" | "notes" | "foods" | "recipes" | "savedMeals" | "weights" | "kv" | "tombstones";
+export const DATA_STORES: StoreName[] = ["diary", "notes", "foods", "recipes", "savedMeals", "weights", "kv", "tombstones"];
 
 /** Borrados registrados para la futura sincronización (last-write-wins). */
 export interface Tombstone {
@@ -46,14 +46,30 @@ export function writeSnapshot(tx: IDBTransaction, s: Snapshot): void {
   put("notes", s.notes);
   put("foods", s.foods);
   put("recipes", s.recipes);
+  put("savedMeals", s.savedMeals);
   put("weights", s.weights);
   const kv = tx.objectStore("kv");
   kv.put(s.profile, "profile");
   kv.put(s.game, "game");
   kv.put(s.settings, "settings");
-  kv.put(s.recents, "recents");
   kv.put(s.favorites, "favorites");
   kv.put(SCHEMA_VERSION, "schema");
+}
+
+/** Lee todo lo guardado en la v1 dentro de la transacción de actualización y llama a `done` con los datos crudos. */
+function readRawV1(tx: IDBTransaction, done: (raw: Record<string, unknown>) => void) {
+  const raw: Record<string, unknown> = {};
+  const jobs: [string, IDBRequest][] = [
+    ...(["diary", "notes", "foods", "recipes", "weights"] as const).map((s) => [s, tx.objectStore(s).getAll()] as [string, IDBRequest]),
+    ...["profile", "game", "settings", "recents", "favorites"].map((k) => [k, tx.objectStore("kv").get(k)] as [string, IDBRequest]),
+  ];
+  let pending = jobs.length;
+  for (const [key, r] of jobs) {
+    r.onsuccess = () => {
+      raw[key] = r.result;
+      if (--pending === 0) done(raw);
+    };
+  }
 }
 
 export function openDb(): Promise<IDBDatabase> {
@@ -68,8 +84,9 @@ export function openDb(): Promise<IDBDatabase> {
       if (ev.oldVersion < 1) {
         db.createObjectStore("diary", { keyPath: "id" }).createIndex("date", "date");
         db.createObjectStore("notes", { keyPath: "date" });
-        db.createObjectStore("foods", { keyPath: "id" });
+        db.createObjectStore("foods", { keyPath: "id" }).createIndex("barcode", "barcode");
         db.createObjectStore("recipes", { keyPath: "id" });
+        db.createObjectStore("savedMeals", { keyPath: "id" });
         db.createObjectStore("weights", { keyPath: "date" });
         db.createObjectStore("kv");
         db.createObjectStore("tombstones", { keyPath: "key" });
@@ -83,7 +100,19 @@ export function openDb(): Promise<IDBDatabase> {
           tx.objectStore("kv").put(SCHEMA_VERSION, "schema");
         }
       }
-      // Futuras versiones: if (ev.oldVersion < 2) { ... }
+      if (ev.oldVersion === 1) {
+        // v1 → v2: índice por código de barras, comidas guardadas y alimentos unificados.
+        // Todo ocurre en la misma transacción: si algo falla, la base se queda en v1 intacta.
+        tx.objectStore("foods").createIndex("barcode", "barcode");
+        db.createObjectStore("savedMeals", { keyPath: "id" });
+        readRawV1(tx, (raw) => {
+          const snapshot = normalizeSnapshot(raw);
+          for (const s of ["diary", "notes", "foods", "recipes", "weights"] as const) tx.objectStore(s).clear();
+          tx.objectStore("kv").delete("recents");
+          writeSnapshot(tx, snapshot);
+        });
+      }
+      // Futuras versiones: if (ev.oldVersion < 3) { ... }
     };
     open.onsuccess = () => {
       const db = open.result;

@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Copy, Trash2 } from "lucide-react";
 import { Sheet } from "./Sheet";
-import { GramsField } from "./GramsField";
+import { QuantityField } from "./QuantityField";
+import { MicroList } from "./MicroList";
 import { MealSelect } from "./MealSelect";
 import { MacroLine } from "./MacroLine";
 import { MacroFields, macroStrings, parseMacroStrings } from "./MacroFields";
 import type { DiaryEntry } from "@/lib/types";
-import { scaleMacros } from "@/lib/nutrition";
+import { scaleMacros, scaleMicros } from "@/lib/nutrition";
+import { defaultQuantity, quantityGrams, unitsFor } from "@/lib/foods";
+import { useFoodLibrary } from "@/lib/hooks";
 import { QUICK_ADD_NAME } from "@/lib/diary";
 
 interface Props {
@@ -19,12 +22,15 @@ interface Props {
 
 export function EntrySheet({ entry, onSave, onDelete, onDuplicate, onClose }: Props) {
   const quick = entry.kind === "quick";
-  const [grams, setGrams] = useState(String(entry.grams));
+  const { known } = useFoodLibrary();
+  // Las raciones salen del alimento actual; los valores, de la copia guardada en la entrada.
+  const servings = (entry.foodId && known.get(entry.foodId)?.servings) || undefined;
+  const [qty, setQty] = useState(() => defaultQuantity({ servings }, entry.grams));
   const [vals, setVals] = useState(macroStrings(entry.per100g));
   const [name, setName] = useState(entry.name);
   const [meal, setMeal] = useState(entry.meal);
 
-  const g = parseFloat(grams) || 0;
+  const g = quantityGrams(qty);
   const quickMacros = parseMacroStrings(vals);
   const draft: DiaryEntry = quick
     ? { ...entry, meal, name: name.trim() || QUICK_ADD_NAME, grams: 100, per100g: quickMacros }
@@ -42,13 +48,15 @@ export function EntrySheet({ entry, onSave, onDelete, onDuplicate, onClose }: Pr
         <>
           <p className="font-display text-xl leading-tight font-bold">{entry.name}</p>
           {entry.brand && <p className="text-muted-foreground text-sm">{entry.brand}</p>}
-          <p className="mb-4 text-xs">
+          <p className="text-xs">
             Total: <MacroLine m={scaleMacros(entry.per100g, g)} />
           </p>
+          <MicroList micros={scaleMicros(entry.per100g, g)} />
+          <div className="mb-4" />
         </>
       )}
       <div className="space-y-4">
-        {quick ? <MacroFields value={vals} onChange={setVals} /> : <GramsField value={grams} onChange={setGrams} />}
+        {quick ? <MacroFields value={vals} onChange={setVals} /> : <QuantityField units={unitsFor({ servings })} value={qty} onChange={setQty} />}
         <MealSelect value={meal} onChange={setMeal} />
         <div className="grid grid-cols-2 gap-2">
           <button type="button" className="btn-ghost" onClick={() => onDuplicate(draft)} disabled={!valid}>

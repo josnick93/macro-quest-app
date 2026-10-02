@@ -1,4 +1,5 @@
-import type { Activity, DiaryEntry, Macros, Profile, Recipe, Targets } from "./types";
+import type { Activity, DiaryEntry, Macros, Nutrients, Profile, Recipe, Targets } from "./types";
+import { MICROS } from "./types";
 
 export const ACTIVITY_FACTORS: Record<Activity, number> = {
   sedentario: 1.2,
@@ -40,8 +41,9 @@ export function sumMacros(list: Macros[]): Macros {
   );
 }
 
-export const entryMacros = (e: DiaryEntry): Macros => scaleMacros(e.per100g, e.grams);
-export const totalsFor = (entries: DiaryEntry[]): Macros => sumMacros(entries.map(entryMacros));
+type Portion = Pick<DiaryEntry, "per100g" | "grams">;
+export const entryMacros = (e: Portion): Macros => scaleMacros(e.per100g, e.grams);
+export const totalsFor = (entries: Portion[]): Macros => sumMacros(entries.map(entryMacros));
 
 /** Mifflin-St Jeor */
 export function calcBMR(p: Profile): number {
@@ -76,15 +78,45 @@ export function recipeRawWeight(recipe: Pick<Recipe, "ingredients">): number {
 }
 
 /** Macros por 100 g de receta cocinada (si no hay peso cocinado, se usa el crudo). */
-export function recipePer100g(recipe: Pick<Recipe, "ingredients" | "cookedWeight">): Macros {
+export function recipePer100g(recipe: Pick<Recipe, "ingredients" | "cookedWeight">): Nutrients {
   const total = recipeTotals(recipe);
   const weight = recipe.cookedWeight > 0 ? recipe.cookedWeight : recipeRawWeight(recipe) || 1;
-  return {
+  const out: Nutrients = {
     kcal: (total.kcal / weight) * 100,
     protein: (total.protein / weight) * 100,
     carbs: (total.carbs / weight) * 100,
     fat: (total.fat / weight) * 100,
   };
+  // Un micro solo se calcula si todos los ingredientes lo tienen; si no, el total engañaría.
+  const ings = recipe.ingredients;
+  for (const { key } of MICROS) {
+    if (ings.length && ings.every((i) => i.per100g[key] !== undefined)) {
+      out[key] = (ings.reduce((acc, i) => acc + (i.per100g[key]! * i.grams) / 100, 0) / weight) * 100;
+    }
+  }
+  return out;
+}
+
+export type Micros = Partial<Pick<Nutrients, "fiber" | "sugar" | "satFat" | "salt">>;
+
+/** Micronutrientes de una cantidad; solo los que el alimento tiene informados. */
+export function scaleMicros(per100g: Nutrients, grams: number): Micros {
+  const out: Micros = {};
+  for (const { key } of MICROS) {
+    const v = per100g[key];
+    if (v !== undefined) out[key] = (v * grams) / 100;
+  }
+  return out;
+}
+
+/** Suma de micros del día. Un micro sin datos en ninguna entrada queda sin definir. */
+export function microTotals(entries: Portion[]): Micros {
+  const out: Micros = {};
+  for (const e of entries) {
+    const m = scaleMicros(e.per100g, e.grams);
+    for (const { key } of MICROS) if (m[key] !== undefined) out[key] = (out[key] ?? 0) + m[key]!;
+  }
+  return out;
 }
 
 export const round1 = (n: number) => Math.round(n * 10) / 10;

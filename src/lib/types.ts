@@ -18,14 +18,41 @@ export interface Macros {
   fat: number;
 }
 
-/** Alimento normalizado (macros por 100 g). */
+/** Macros + micronutrientes opcionales (g por 100 g; sal en g). */
+export interface Nutrients extends Macros {
+  fiber?: number | undefined;
+  sugar?: number | undefined;
+  satFat?: number | undefined;
+  salt?: number | undefined;
+}
+
+export const MICROS: { key: "fiber" | "sugar" | "satFat" | "salt"; label: string }[] = [
+  { key: "fiber", label: "Fibra" },
+  { key: "sugar", label: "Azúcares" },
+  { key: "satFat", label: "Grasa saturada" },
+  { key: "salt", label: "Sal" },
+];
+
+/** Ración o unidad: "1 yogur" = 125 g. */
+export interface Serving {
+  label: string;
+  grams: number;
+}
+
+/** off: Open Food Facts · custom: creado por el usuario · recipe: receta propia. */
+export type FoodSource = "off" | "custom" | "recipe";
+
+/** Alimento normalizado (valores por 100 g). */
 export interface Food {
   id: string;
   name: string;
   brand?: string | undefined;
   barcode?: string | undefined;
-  per100g: Macros;
-  custom?: boolean;
+  per100g: Nutrients;
+  servings?: Serving[] | undefined;
+  source: FoodSource;
+  /** Datos de Open Food Facts corregidos a mano por el usuario. */
+  edited?: boolean | undefined;
   updatedAt?: string;
 }
 
@@ -41,8 +68,8 @@ export interface DiaryEntry {
   name: string;
   brand?: string | undefined;
   grams: number;
-  /** Copia de los macros en el momento de registrar: editar el alimento no reescribe el pasado. */
-  per100g: Macros;
+  /** Copia de los valores en el momento de registrar: editar el alimento no reescribe el pasado. */
+  per100g: Nutrients;
   foodId?: string | undefined;
   recipeId?: string | undefined;
   /** ISO datetime; ordena las entradas dentro del día. */
@@ -63,7 +90,8 @@ export interface RecipeIngredient {
   id: string;
   name: string;
   grams: number;
-  per100g: Macros;
+  per100g: Nutrients;
+  foodId?: string | undefined;
 }
 
 export interface Recipe {
@@ -72,8 +100,21 @@ export interface Recipe {
   ingredients: RecipeIngredient[];
   /** Peso total una vez cocinada, en gramos. */
   cookedWeight: number;
+  /** En cuántas raciones se divide (opcional). */
+  servings?: number | undefined;
   createdAt: string;
   updatedAt?: string;
+}
+
+/** Plantilla de comida ("Mi desayuno habitual") que se registra de golpe. */
+export type SavedMealItem = Omit<NewEntry, "date" | "meal">;
+
+export interface SavedMeal {
+  id: string;
+  name: string;
+  items: SavedMealItem[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WeightLog {

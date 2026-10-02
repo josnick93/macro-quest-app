@@ -40,12 +40,15 @@ describe("fromLegacy", () => {
     expect(s.diary.find((e) => e.id === "e")!.meal).toBe("snacks");
   });
   it("migra alimentos, recetas, pesos, perfil y recientes", () => {
-    expect(s.foods).toHaveLength(1);
-    expect(s.foods[0]!.custom).toBe(true);
+    // El propio + la avena de recientes (pasa a historial)
+    expect(s.foods.map((f) => [f.id, f.source])).toEqual([
+      ["custom:1", "custom"],
+      ["off:1", "off"],
+    ]);
     expect(s.recipes[0]!.updatedAt).toBe("2026-09-01T00:00:00.000Z");
     expect(s.weights).toEqual([{ date: "2026-09-29", kg: 81.2, updatedAt: NOW }]);
     expect(s.profile.heightCm).toBe(180);
-    expect(s.recents).toHaveLength(1);
+    expect(s.favorites).toEqual([]);
   });
   it("conserva la XP y reconstruye los días activos desde el diario", () => {
     expect(s.game.xp).toBe(1234);
@@ -76,5 +79,63 @@ describe("parseImport", () => {
     expect(() => parseImport([], NOW)).toThrow(ImportError);
     expect(() => parseImport({ foo: 1 }, NOW)).toThrow(ImportError);
     expect(() => parseImport({ app: "macro-quest", schema: SCHEMA_VERSION + 1, data: {} }, NOW)).toThrow(ImportError);
+  });
+});
+
+describe("v1 → v2", () => {
+  const v1 = {
+    diary: [],
+    foods: [{ id: "custom:1", name: "Mi pan", per100g: { kcal: 250, protein: 9, carbs: 48, fat: 2 }, custom: true, updatedAt: "2026-09-01T00:00:00.000Z" }],
+    recents: [
+      { id: "off:1", name: "Avena", per100g: { kcal: 370, protein: 13, carbs: 60, fat: 7 } },
+      // versión antigua del propio en recientes: no debe pisar la del almacén
+      { id: "custom:1", name: "Pan viejo", per100g: { kcal: 1, protein: 0, carbs: 0, fat: 0 }, custom: true },
+    ],
+    favorites: [
+      { id: "off:2", name: "Skyr", per100g: { kcal: 60, protein: 10, carbs: 4, fat: 0 } },
+      { id: "recipe:r1", name: "Lentejas", per100g: { kcal: 120, protein: 8, carbs: 15, fat: 3 } },
+    ],
+  };
+
+  it("unifica alimentos, convierte favoritos a ids y no guarda recetas como alimento", () => {
+    const s = parseImport({ app: "macro-quest", schema: 1, exportedAt: NOW, data: v1 }, NOW);
+    expect(s.foods.map((f) => f.id).sort()).toEqual(["custom:1", "off:1", "off:2"]);
+    expect(s.foods.find((f) => f.id === "custom:1")!.name).toBe("Mi pan");
+    expect(s.favorites).toEqual(["off:2", "recipe:r1"]);
+    expect(s.savedMeals).toEqual([]);
+  });
+
+  it("conserva micros y raciones válidos y descarta los inválidos", () => {
+    const s = parseImport(
+      {
+        app: "macro-quest",
+        schema: 2,
+        data: {
+          foods: [
+            {
+              id: "custom:2",
+              name: "Yogur",
+              source: "custom",
+              per100g: { kcal: 60, protein: 10, carbs: 4, fat: 0, fiber: 0, sugar: 4, salt: -1 },
+              servings: [{ label: "1 yogur", grams: 125 }, { label: "", grams: 10 }, { label: "mal", grams: 0 }],
+            },
+          ],
+        },
+      },
+      NOW,
+    );
+    const f = s.foods[0]!;
+    expect(f.per100g).toEqual({ kcal: 60, protein: 10, carbs: 4, fat: 0, fiber: 0, sugar: 4 });
+    expect(f.servings).toEqual([{ label: "1 yogur", grams: 125 }]);
+  });
+
+  it("comidas guardadas: descarta las vacías", () => {
+    const item = { kind: "food", name: "Avena", grams: 60, per100g: { kcal: 370, protein: 13, carbs: 60, fat: 7 }, foodId: "off:1" };
+    const s = parseImport(
+      { app: "macro-quest", schema: 2, data: { savedMeals: [{ id: "m1", name: "Desayuno", items: [item] }, { id: "m2", name: "Vacía", items: [] }] } },
+      NOW,
+    );
+    expect(s.savedMeals.map((m) => m.id)).toEqual(["m1"]);
+    expect(s.savedMeals[0]!.items[0]!.grams).toBe(60);
   });
 });

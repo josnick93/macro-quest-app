@@ -3,10 +3,14 @@ import {
   type DayNote,
   type DiaryEntry,
   type Food,
+  type FoodSource,
   type GameState,
-  type Macros,
+  type Nutrients,
   type Profile,
   type Recipe,
+  type SavedMeal,
+  type SavedMealItem,
+  type Serving,
   type Settings,
   type WeightLog,
 } from "../types";
@@ -15,7 +19,7 @@ import {
  * Versión del esquema de datos. Si cambia la forma de algo guardado:
  * sube este número y añade un paso en MIGRATIONS. Nunca se pierden datos.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const LEGACY_PREFIX = "sysnutri:";
 
@@ -34,15 +38,19 @@ export const DEFAULT_PROFILE: Profile = {
 export const DEFAULT_GAME: GameState = { xp: 0, activeDays: [], awarded: [], history: [] };
 export const DEFAULT_SETTINGS: Settings = { hiddenMeals: [] };
 
-/** Todos los datos del usuario. Es también el formato de exportación. */
+/**
+ * Todos los datos del usuario. Es también el formato de exportación.
+ * v2: `foods` guarda todos los alimentos conocidos (propios y de OFF usados/corregidos);
+ * favoritos son ids; recientes y frecuentes se derivan del diario.
+ */
 export interface Snapshot {
   diary: DiaryEntry[];
   notes: DayNote[];
   foods: Food[];
   recipes: Recipe[];
+  savedMeals: SavedMeal[];
   weights: WeightLog[];
-  recents: Food[];
-  favorites: Food[];
+  favorites: string[];
   profile: Profile;
   game: GameState;
   settings: Settings;
@@ -60,8 +68,8 @@ export const emptySnapshot = (): Snapshot => ({
   notes: [],
   foods: [],
   recipes: [],
+  savedMeals: [],
   weights: [],
-  recents: [],
   favorites: [],
   profile: { ...DEFAULT_PROFILE },
   game: { ...DEFAULT_GAME },
@@ -77,29 +85,79 @@ const str = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 const isISODate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 const finite = (v: unknown, fallback = 0) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
 
-function macros(v: unknown): Macros | null {
+const optional = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);
+
+function nutrients(v: unknown): Nutrients | null {
   if (!isObj(v)) return null;
-  return { kcal: finite(v.kcal), protein: finite(v.protein), carbs: finite(v.carbs), fat: finite(v.fat) };
+  const n: Nutrients = { kcal: finite(v.kcal), protein: finite(v.protein), carbs: finite(v.carbs), fat: finite(v.fat) };
+  for (const k of ["fiber", "sugar", "satFat", "salt"] as const) {
+    const x = optional(v[k]);
+    if (x !== undefined) n[k] = x;
+  }
+  return n;
+}
+
+function servings(v: unknown): Serving[] | undefined {
+  const list = arr(v).flatMap((s) => (isObj(s) && str(s.label) && finite(s.grams) > 0 ? [{ label: s.label, grams: finite(s.grams) }] : []));
+  return list.length ? list : undefined;
+}
+
+function source(v: Obj, id: string): FoodSource {
+  if (v.source === "off" || v.source === "custom" || v.source === "recipe") return v.source;
+  if (v.custom === true || id.startsWith("custom:")) return "custom"; // v1
+  if (id.startsWith("recipe:")) return "recipe";
+  return "off";
 }
 
 function food(v: unknown, now: string): Food | null {
   if (!isObj(v) || !str(v.id) || !str(v.name)) return null;
-  const per100g = macros(v.per100g);
+  const per100g = nutrients(v.per100g);
   if (!per100g) return null;
-  return {
+  const f: Food = {
     id: v.id,
     name: v.name,
     brand: str(v.brand) ? v.brand : undefined,
     barcode: str(v.barcode) ? v.barcode : undefined,
     per100g,
-    ...(v.custom === true ? { custom: true } : {}),
+    source: source(v, v.id),
     updatedAt: str(v.updatedAt) ? v.updatedAt : now,
   };
+  const sv = servings(v.servings);
+  if (sv) f.servings = sv;
+  if (v.edited === true) f.edited = true;
+  return f;
+}
+
+function savedItem(v: unknown): SavedMealItem | null {
+  if (!isObj(v) || !str(v.name)) return null;
+  const per100g = nutrients(v.per100g);
+  const grams = finite(v.grams, -1);
+  if (!per100g || grams <= 0) return null;
+  return {
+    kind: v.kind === "recipe" || v.kind === "quick" ? v.kind : "food",
+    name: v.name,
+    brand: str(v.brand) ? v.brand : undefined,
+    grams,
+    per100g,
+    foodId: str(v.foodId) ? v.foodId : undefined,
+    recipeId: str(v.recipeId) ? v.recipeId : undefined,
+  };
+}
+
+function savedMeal(v: unknown, now: string): SavedMeal | null {
+  if (!isObj(v) || !str(v.id) || !str(v.name)) return null;
+  const items = arr(v.items).flatMap((i) => {
+    const r = savedItem(i);
+    return r ? [r] : [];
+  });
+  if (!items.length) return null;
+  const createdAt = str(v.createdAt) ? v.createdAt : now;
+  return { id: v.id, name: v.name, items, createdAt, updatedAt: str(v.updatedAt) ? v.updatedAt : createdAt };
 }
 
 function entry(v: unknown, now: string): DiaryEntry | null {
   if (!isObj(v) || !str(v.id) || !isISODate(v.date) || !str(v.name)) return null;
-  const per100g = macros(v.per100g);
+  const per100g = nutrients(v.per100g);
   const grams = finite(v.grams, -1);
   if (!per100g || grams <= 0) return null;
   const recipeId = str(v.recipeId) ? v.recipeId : undefined;
@@ -125,15 +183,18 @@ function recipe(v: unknown, now: string): Recipe | null {
   if (!isObj(v) || !str(v.id) || !str(v.name)) return null;
   const ingredients = arr(v.ingredients).flatMap((i) => {
     if (!isObj(i) || !str(i.name)) return [];
-    const per100g = macros(i.per100g);
-    return per100g ? [{ id: str(i.id) ? i.id : `${v.id}:${i.name}`, name: i.name, grams: finite(i.grams), per100g }] : [];
+    const per100g = nutrients(i.per100g);
+    if (!per100g) return [];
+    return [{ id: str(i.id) ? i.id : `${v.id}:${i.name}`, name: i.name, grams: finite(i.grams), per100g, foodId: str(i.foodId) ? i.foodId : undefined }];
   });
   const createdAt = str(v.createdAt) ? v.createdAt : now;
+  const sv = finite(v.servings);
   return {
     id: v.id,
     name: v.name,
     ingredients,
     cookedWeight: finite(v.cookedWeight),
+    servings: sv > 0 ? sv : undefined,
     createdAt,
     updatedAt: str(v.updatedAt) ? v.updatedAt : createdAt,
   };
@@ -202,15 +263,33 @@ export function normalizeSnapshot(raw: Obj, now = new Date().toISOString()): Sna
   const diary = list(raw.diary, entry, now).map((e, i) =>
     e.createdAt ? e : { ...e, createdAt: new Date(base - 1_000_000 + i).toISOString() },
   );
-  const custom = list(raw.foods, food, now).map((f) => ({ ...f, custom: true }));
+
+  // Alimentos: los del almacén mandan; los de recientes/favoritos v1 (objetos) pasan a ser historial.
+  const foods = new Map<string, Food>();
+  for (const f of list(raw.foods, food, now)) foods.set(f.id, f);
+  const favorites: string[] = [];
+  const absorb = (v: unknown, fav: boolean) =>
+    arr(v).forEach((x) => {
+      if (typeof x === "string" && x) {
+        if (fav) favorites.push(x);
+        return;
+      }
+      const f = food(x, now);
+      if (!f) return;
+      if (f.source !== "recipe" && !foods.has(f.id)) foods.set(f.id, f);
+      if (fav) favorites.push(f.id);
+    });
+  absorb(raw.recents, false);
+  absorb(raw.favorites, true);
+
   return {
     diary,
     notes: list(raw.notes, note, now),
-    foods: custom,
+    foods: [...foods.values()],
     recipes: list(raw.recipes, recipe, now),
+    savedMeals: list(raw.savedMeals, savedMeal, now),
     weights: list(raw.weights, weight, now),
-    recents: list(raw.recents, food, now),
-    favorites: list(raw.favorites, food, now),
+    favorites: [...new Set(favorites)],
     profile: profile(raw.profile),
     game: game(raw.game, diary),
     settings: settings(raw.settings),
@@ -237,10 +316,11 @@ export function fromLegacy(get: (key: string) => unknown, now = new Date().toISO
   );
 }
 
-/** Pasos de migración entre versiones del formato de exportación. Índice = versión de origen. */
-const MIGRATIONS: Record<number, (d: Obj) => Obj> = {
-  // 1: (d) => ({ ...d, ... })   ← ejemplo para la futura v2
-};
+/**
+ * Pasos de migración entre versiones del formato de exportación. Índice = versión de origen.
+ * v1 → v2 no necesita paso: normalizeSnapshot acepta ambas formas (recientes/favoritos como objetos o ids).
+ */
+const MIGRATIONS: Record<number, (d: Obj) => Obj> = {};
 
 export class ImportError extends Error {}
 
