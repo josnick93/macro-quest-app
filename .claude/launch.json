@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "dev", "runtimeExecutable": "env", "runtimeArgs": ["NO_SSL=1", "npx", "vite", "--port", "5174", "--strictPort"], "port": 5174 }
+    { "name": "dev", "runtimeExecutable": "env", "runtimeArgs": ["NO_SSL=1", "npx", "vite", "--port", "5174", "--strictPort"], "port": 5174 },
+    { "name": "preview", "runtimeExecutable": "env", "runtimeArgs": ["NO_SSL=1", "npx", "vite", "preview", "--port", "4174", "--strictPort"], "port": 4174 }
   ]
 }

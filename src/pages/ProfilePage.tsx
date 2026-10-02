@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "react-router-dom";
 import { SystemWindow } from "@/components/SystemWindow";
 import { MEALS, type Activity, type Profile, type Sex } from "@/lib/types";
 import { ACTIVITY_LABELS, calcTargets, formulaTDEE, goalDeltaKcal, leanMassKg, navyBodyFat } from "@/lib/nutrition";
@@ -9,6 +10,7 @@ import { useProfile, useSaveProfile, useSaveSettings, useSaveWeight, useSettings
 import { repos } from "@/lib/repos";
 import { ImportError, parseImport, SCHEMA_VERSION, type ExportFile } from "@/lib/repos/migrations";
 import { addDaysISO, todayISO } from "@/lib/date";
+import { BACKUP_EVERY_DAYS, daysSince, lastBackup, markBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
@@ -108,6 +110,10 @@ export function ProfilePage() {
   const { data: settings } = useSettings();
   const saveSettings = useSaveSettings();
   const estimate = useTdeeEstimate();
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === "#datos") document.getElementById("datos")?.scrollIntoView();
+  }, [hash]);
   const toggleMeal = (id: (typeof MEALS)[number]["id"]) => {
     const hidden = settings.hiddenMeals.includes(id) ? settings.hiddenMeals.filter((m) => m !== id) : [...settings.hiddenMeals, id];
     if (hidden.length === MEALS.length) return toast.error("Deja al menos una comida visible");
@@ -142,6 +148,8 @@ export function ProfilePage() {
     toast.success("Perfil actualizado");
   };
 
+  const [backupDays, setBackupDays] = useState(() => daysSince(lastBackup(), Date.now()));
+
   const exportData = async () => {
     try {
       const file: ExportFile = { app: "macro-quest", schema: SCHEMA_VERSION, exportedAt: new Date().toISOString(), data: await repos.data.exportAll() };
@@ -151,6 +159,8 @@ export function ProfilePage() {
       a.download = `macro-quest-${todayISO()}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      markBackup();
+      setBackupDays(0);
     } catch (e) {
       toast.error(`No se pudo exportar: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -378,6 +388,7 @@ export function ProfilePage() {
       </SystemWindow>
 
       <SystemWindow title="Datos" scan={false}>
+        <span id="datos" className="block scroll-mt-4" />
         <div className="grid grid-cols-2 gap-2">
           <button className="btn-ghost" onClick={exportData}>
             <Download className="h-4 w-4" /> Exportar
@@ -392,7 +403,10 @@ export function ProfilePage() {
           </label>
         </div>
         <p className="text-muted-foreground mt-3 text-[11px]">
-          Tus datos se guardan solo en este dispositivo. Exporta de vez en cuando como copia de seguridad.
+          Tus datos se guardan solo en este dispositivo. Exporta de vez en cuando como copia de seguridad.{" "}
+          <span className={backupDays === null || backupDays >= BACKUP_EVERY_DAYS ? "text-over" : ""}>
+            {backupDays === null ? "Aún no has exportado ninguna copia." : backupDays === 0 ? "Última copia: hoy." : `Última copia: hace ${backupDays} ${backupDays === 1 ? "día" : "días"}.`}
+          </span>
         </p>
         <p className="text-muted-foreground mt-2 text-[11px]">
           Datos nutricionales de{" "}

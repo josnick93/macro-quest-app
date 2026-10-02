@@ -61,7 +61,12 @@ Abre la URL `Network: http://192.168.x.x:5173` en el móvil.
 Cada `git push` a `main` vuelve a desplegar automáticamente.
 
 ### Instalar en el móvil
-Abre la URL https → menú del navegador → **Añadir a pantalla de inicio**.
+Abre la URL https → menú del navegador → **Añadir a pantalla de inicio** (Android: **Instalar aplicación**).
+
+### Sin conexión y actualizaciones
+- Al compilar se genera `sw.js` (plantilla en `src/sw.template.js`, plugin en `vite.config.ts`) con todos los archivos de esa versión: tras la primera visita la app abre sin conexión. Buscar en Open Food Facts sigue necesitando red.
+- Tras un despliegue, la app avisa con «Hay una versión nueva» y se actualiza al tocar **Actualizar**.
+- El service worker solo existe en la versión compilada. Para probarlo en local: `npm run build && NO_SSL=1 npm run preview`.
 
 ## Datos
 
@@ -69,6 +74,7 @@ Abre la URL https → menú del navegador → **Añadir a pantalla de inicio**.
 - La primera vez se migran automáticamente los datos de la versión antigua (`localStorage`, prefijo `sysnutri:`); esas claves se conservan como copia.
 - Versión de esquema y migraciones en `src/lib/repos/migrations.ts`. Cualquier cambio de formato lleva su migración.
 - Cada navegador/dispositivo tiene sus propios datos.
+- Si llevas más de 14 días sin exportar, la app te lo recuerda (como mucho una vez por semana).
 - **Perfil → Exportar** para copia de seguridad (JSON); **Importar** para restaurarla (sustituye los datos; acepta también copias antiguas).
 
 ## Estructura

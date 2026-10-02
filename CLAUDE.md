@@ -60,6 +60,8 @@ src/
 - `npm test` (Vitest; tests de la lógica pura de `lib/`: nutrición, objetivos, XP, diario, alimentos, migraciones)
 
 ## Notas
+- PWA: `sw.js` se genera al compilar (plugin en `vite.config.ts` + `src/sw.template.js`, sin dependencias) y precachea todos los archivos de la versión. Solo en producción; probar con `npm run build && NO_SSL=1 npm run preview`.
+- Preferencias por dispositivo (no son datos del usuario, no se exportan): localStorage `mq:*` (escaneo continuo, fecha de la última copia y del último aviso).
 - Escáner: la cámara en directo en iOS requiere HTTPS; por http en la red local funciona el botón "Hacer foto".
 - Deploy previsto: Cloudflare Pages (build `npm run build`, salida `dist`, `public/_redirects` para SPA).
 - Backend futuro: Go o PocketBase en una Orange Pi expuesta con Cloudflare Tunnel.
