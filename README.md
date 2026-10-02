@@ -87,7 +87,7 @@ src/
     off.ts        Cliente de Open Food Facts
     hooks.ts      Hooks de datos (React Query)
     repos/        Capa de datos (IndexedDB) y migraciones
-public/         manifest, icono, _redirects (SPA)
+public/         manifest, iconos, _headers
 ```
 
 ## Backend futuro
