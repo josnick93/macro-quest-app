@@ -130,7 +130,8 @@ async function callback(request: Request, url: URL, env: Required<AuthEnv>, deps
     if (!res.ok) return fail(`google_${await googleError(res)}`);
     const idToken = ((await res.json()) as { id_token?: unknown }).id_token;
     if (typeof idToken === "string") user = userFromIdToken(idToken, env.GOOGLE_CLIENT_ID, deps.now());
-  } catch {
+  } catch (e) {
+    console.error("login: fallo al hablar con Google", e);
     return fail("red");
   }
   if (!user) return fail("identidad");
@@ -150,8 +151,11 @@ async function callback(request: Request, url: URL, env: Required<AuthEnv>, deps
   return redirect(`${AFTER}?login=ok`, [clearState, cookie(SESSION_COOKIE, token, SESSION_DAYS * 86_400)]);
 }
 
+// `fetch` y `Date.now` van envueltos: en Workers, llamarlos como método de otro objeto lanza «Illegal invocation».
+const DEFAULT_DEPS: AuthDeps = { fetcher: (url, init) => fetch(url, init), now: () => Date.now() };
+
 /** Atiende /api/auth/*. */
-export async function handleAuth(request: Request, env: AuthEnv, deps: AuthDeps = { fetcher: fetch, now: Date.now }): Promise<Response> {
+export async function handleAuth(request: Request, env: AuthEnv, deps: AuthDeps = DEFAULT_DEPS): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.slice("/api/auth/".length);
 
