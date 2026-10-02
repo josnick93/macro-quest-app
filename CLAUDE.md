@@ -28,11 +28,12 @@ Vite 8 · React 19 · TypeScript 5.9 · Tailwind v4 · react-router-dom 7 · Tan
 src/
   pages/        TodayPage (diario por días, ?fecha=), AddPage (?fecha=&comida=), RecipesPage, ProgressPage (lazy), ProfilePage,
                 WelcomePage (/bienvenida: primera vez, 3 pasos → perfil y objetivo), LoginPage (puerta de entrada)
-  components/   SystemWindow, Sheet, BarcodeScanner (lazy), FoodPicker, MacroRing, XPBar, QuestItem…
+  components/   progress/ (ventanas de Progreso: peso, informe, calendario), SystemWindow, Sheet, BarcodeScanner (lazy), FoodPicker, MacroRing, XPBar, QuestItem…
   lib/
     types.ts      Modelos (Food, Entry, Recipe, Profile, Weight, Game…)
     nutrition.ts  Basal (Mifflin / Katch-McArdle con % de grasa), gasto, objetivos por día, % grasa (método Marina), macros de recetas
     goals.ts      Escenarios definición/mantenimiento/volumen, avisos de salud, plazo al peso objetivo, gasto real (TDEE adaptativo)
+    progress.ts   Progreso: media móvil y ritmo del peso, proyección al objetivo, informe del periodo, calendario del mes
     xp.ts         Misiones, XP, niveles, rachas
     off.ts        Cliente Open Food Facts (ODbL): pregunta a /api/off/* (worker) y, si no existe o falla, a OFF directo. Mínimo 3 letras
     offApi.ts     URLs y validación de OFF, compartidas entre la app y el worker
