@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast, Toaster } from "sonner";
 import { BottomNav } from "@/components/BottomNav";
+import { BackupReminder } from "@/components/BackupReminder";
 import { SystemWindow } from "@/components/SystemWindow";
 import { TodayPage } from "@/pages/TodayPage";
 import { AddPage } from "@/pages/AddPage";
@@ -45,6 +46,7 @@ export default function App() {
           </Routes>
         </div>
         <BottomNav />
+        <BackupReminder />
         <Toaster position="top-center" theme="dark" />
       </BrowserRouter>
     </QueryClientProvider>
