@@ -26,6 +26,7 @@ const qc = new QueryClient({
 });
 
 requestPersistence();
+const CharacterPage = lazy(() => import("@/pages/CharacterPage").then((m) => ({ default: m.CharacterPage })));
 const ProgressPage = lazy(() => import("@/pages/ProgressPage").then((m) => ({ default: m.ProgressPage })));
 
 function NotFound() {
@@ -104,6 +105,7 @@ function Shell() {
           <Route path="/recetas" element={<RecipesPage />} />
           <Route path="/progreso" element={<Suspense fallback={null}><ProgressPage /></Suspense>} />
           <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="/ficha" element={<Suspense fallback={null}><CharacterPage /></Suspense>} />
           <Route path={WELCOME} element={<WelcomePage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

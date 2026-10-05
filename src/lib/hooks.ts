@@ -14,6 +14,7 @@ import { dailyQuests, shieldedStreak, syncDayXp, weekStartISO, type Quest } from
 import { reachedTarget, syncGame, weeklyQuests, type Achievement, type AchievementContext, type Week } from "./gamification";
 import { dayStats } from "./progress";
 import { hasScanned } from "./scanFlag";
+import { bestStreak, characterStats, historyStats, weeklyQuestsDone, type Stat } from "./character";
 import { addDaysISO, msUntilMidnight, todayISO } from "./date";
 
 const opts = { staleTime: 0, refetchOnWindowFocus: false } as const;
@@ -388,6 +389,36 @@ export function useGameExtras(today: string): { weekly: Quest[]; extras: GameExt
     [ready, weeks, game.data.activeDays, today, count.data, recipes.data, foods.data, weights.data, profileSet, profile.data, latest],
   );
   return { weekly: weeks[0]!.quests, extras };
+}
+
+/** Primera fecha posible: para leer el diario entero. */
+const ALL_TIME = "0000-01-01";
+
+export interface CharacterSheet {
+  stats: Stat[];
+  bestStreak: number;
+  weeklyDone: number;
+  entries: number;
+}
+
+/** Ficha de personaje: atributos y resumen a partir de todo el historial. null mientras carga. */
+export function useCharacter(today: string): CharacterSheet | null {
+  const diary = useDiaryRange(ALL_TIME, today);
+  const weights = useWeights();
+  const profile = useProfile();
+  const game = useGame();
+  const ready = diary.isFetched && weights.isFetched && profile.isFetched && game.isFetched;
+  return useMemo(() => {
+    if (!ready) return null;
+    const input = { entries: diary.data, weights: weights.data, targetsFor: (d: string) => calcTargets(profile.data, d), today };
+    const history = historyStats(input);
+    return {
+      stats: characterStats(input, history),
+      bestStreak: bestStreak(game.data.activeDays),
+      weeklyDone: weeklyQuestsDone(history, weights.data),
+      entries: diary.data.length,
+    };
+  }, [ready, diary.data, weights.data, profile.data, game.data.activeDays, today]);
 }
 
 export interface GameRewards {
