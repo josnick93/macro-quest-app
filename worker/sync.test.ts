@@ -177,7 +177,10 @@ describe("cuenta", () => {
   it("borrar la cuenta borra también la copia de los datos", async () => {
     const cookie = await user("adios");
     await sync(cookie, 0, [entry("e1", 1)]);
-    await handleAuth(new Request(`${ORIGIN}/api/auth/delete`, { method: "POST", headers: { cookie, origin: ORIGIN } }), env());
+    await handleAuth(new Request(`${ORIGIN}/api/auth/delete`, { method: "POST", headers: { cookie, origin: ORIGIN } }), env(), {
+      fetcher: fetch,
+      now: () => NOW,
+    });
     const left = await db.prepare("SELECT COUNT(*) AS n FROM records WHERE user_id = ?1").bind("adios").first<{ n: number }>();
     expect(left).toEqual({ n: 0 });
   });
