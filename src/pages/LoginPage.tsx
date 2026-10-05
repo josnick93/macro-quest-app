@@ -26,6 +26,15 @@ export function LoginPage({ offline, onRetry }: { offline: boolean; onRetry: () 
           Se guardan tu nombre, tu correo y una copia de tu diario, para que lo tengas en todos tus dispositivos y no se pierda. Puedes borrarlo
           todo cuando quieras desde Perfil.
         </p>
+        <p className="text-muted-foreground mt-2 text-[11px]">
+          <a className="underline" href="/privacidad">
+            Privacidad
+          </a>
+          {" · "}
+          <a className="underline" href="/condiciones">
+            Condiciones
+          </a>
+        </p>
       </SystemWindow>
     </div>
   );

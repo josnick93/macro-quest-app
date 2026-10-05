@@ -27,6 +27,7 @@ function serviceWorker(): Plugin {
       const publicDir = path.resolve(import.meta.dirname, "public");
       for (const name of readdirSync(publicDir).sort()) {
         if (name.startsWith("_")) continue; // _headers: configuración del alojamiento
+        if (name.endsWith(".html")) continue; // páginas legales: Cloudflare redirige /x.html a /x y siempre van a la red
         files.push(`/${name}`);
         hash.update(name).update(readFileSync(path.join(publicDir, name)));
       }

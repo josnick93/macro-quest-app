@@ -3,6 +3,7 @@ const CACHE = "mq-__VERSION__";
 const FONTS = "mq-fonts";
 const FILES = "__FILES__";
 const SHELL = "/";
+const LEGAL = ["/privacidad", "/condiciones"];
 // ignoreVary: el servidor puede responder con "Vary: Origin" y la petición de la página (crossorigin) no coincidiría.
 const MATCH = { cacheName: CACHE, ignoreVary: true };
 
@@ -52,6 +53,9 @@ self.addEventListener("fetch", (event) => {
 
   // La API (login incluido, que es una navegación) va siempre a la red.
   if (url.pathname.startsWith("/api/")) return;
+
+  // Páginas legales: HTML propio, no la SPA.
+  if (LEGAL.includes(url.pathname)) return;
 
   // Navegación: la app es una SPA, cualquier ruta abre el mismo index.html.
   if (req.mode === "navigate") {
