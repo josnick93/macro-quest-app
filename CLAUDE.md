@@ -26,7 +26,7 @@ Vite 8 · React 19 · TypeScript 5.9 · Tailwind v4 · react-router-dom 7 · Tan
 ## Estructura
 ```
 src/
-  pages/        TodayPage (diario por días, ?fecha=), AddPage (?fecha=&comida=), RecipesPage, ProgressPage (lazy), ProfilePage,
+  pages/        TodayPage (diario por días, ?fecha=), AddPage (?fecha=&comida=), RecipesPage, ProgressPage (lazy), CharacterPage (/ficha, lazy: ficha de personaje; se abre desde XPBar), ProfilePage,
                 WelcomePage (/bienvenida: primera vez, 3 pasos → perfil y objetivo), LoginPage (puerta de entrada)
   components/   progress/ (ventanas de Progreso: peso, informe, calendario), SystemWindow, Sheet, BarcodeScanner (lazy), FoodPicker, MacroRing, XPBar, QuestItem…
   lib/
@@ -36,6 +36,7 @@ src/
     progress.ts   Progreso: media móvil y ritmo del peso, proyección al objetivo, informe del periodo, calendario del mes
     xp.ts         Misiones diarias, XP, niveles, racha con escudo, tabla de XP de semanales y logros, unión del juego entre dispositivos
     gamification.ts Misiones semanales y logros (definición, condiciones y reparto de XP)
+    character.ts  Ficha de personaje: atributos FUE/VIT/DIS/INT (días acumulados, nunca bajan) + forma de 30 días, títulos por nivel
     off.ts        Cliente Open Food Facts (ODbL): pregunta a /api/off/* (worker) y, si no existe o falla, a OFF directo. Mínimo 3 letras
     offApi.ts     URLs y validación de OFF, compartidas entre la app y el worker
     hooks.ts      Hooks React Query sobre los repos
@@ -72,6 +73,7 @@ worker/         Cloudflare Worker. index.ts: /api/off/search y /api/off/product/
 - El pesaje más reciente actualiza `profile.weightKg` (y cambiar el peso en Perfil registra un pesaje).
 - Avisos de salud del plan: informativos y en ámbar, nunca bloquean.
 - Juego (esquema v4): `achievements` guarda id → fecha de cada logro. La racha con escudo y las misiones semanales no guardan nada: se derivan de los días activos, el diario y los pesajes. Toda recompensa nueva necesita su XP en `awardXp` (xp.ts), o no se contará al unir dos dispositivos.
+- Ficha de personaje: todo derivado del diario, los pesajes y el juego (sin datos propios). Los atributos cuentan días acumulados de todo el historial y nunca bajan; solo la «forma» (últimos 30 días) refleja una mala racha.
 - Gamificación: nunca quita XP ni castiga comer más; pasarse del objetivo se muestra en ámbar (`--over`), nunca en rojo.
 
 ## Comandos

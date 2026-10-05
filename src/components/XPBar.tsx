@@ -1,20 +1,25 @@
+import { Link } from "react-router-dom";
 import { Flame, Shield } from "lucide-react";
 import { levelProgress, shieldedStreak } from "@/lib/xp";
+import { levelTitle } from "@/lib/character";
 import { cn } from "@/lib/utils";
 
-/** Nivel, XP y racha. El escudo perdona un día sin registro por semana. */
+/** Nivel, XP y racha; abre la ficha de personaje. El escudo perdona un día sin registro por semana. */
 export function XPBar({ xp, activeDays, today }: { xp: number; activeDays: readonly string[]; today: string }) {
   const { level, current, needed, pct } = levelProgress(xp);
   const { streak, shieldReady } = shieldedStreak(activeDays, today);
   return (
-    <div className="system-window flex items-center gap-3 px-4 py-3">
+    <Link to="/ficha" className="system-window flex items-center gap-3 px-4 py-3 active:opacity-80">
       <div className="border-primary/60 bg-primary/10 flex h-11 w-11 shrink-0 items-center justify-center border">
         <span className="font-display neon-text text-xl leading-none font-bold">{level}</span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-baseline justify-between text-[11px]">
-          <span className="font-display tracking-[0.2em] uppercase">Nivel {level}</span>
-          <span className="text-muted-foreground tabular-nums">
+          <span className="font-display truncate tracking-[0.2em] uppercase">
+            <span className="sr-only">Nivel {level}, </span>
+            {levelTitle(level)}
+          </span>
+          <span className="text-muted-foreground shrink-0 pl-2 tabular-nums">
             {current} / {needed} XP
           </span>
         </div>
@@ -33,6 +38,6 @@ export function XPBar({ xp, activeDays, today }: { xp: number; activeDays: reado
           </>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
