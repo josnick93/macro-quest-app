@@ -5,7 +5,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import basicSsl from "@vitejs/plugin-basic-ssl";
-import { adsTxt, parseAdsConfig } from "./src/lib/adsConfig";
+import { adsTxt, parseAdsConfig } from "./src/lib/adsConfig.ts";
 
 /**
  * Genera /sw.js al compilar, con la lista de archivos de esa versión para que la app abra sin conexión.
