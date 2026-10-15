@@ -19,6 +19,7 @@
     "binding": "ASSETS",
     // SPA: cualquier ruta que no sea un archivo devuelve index.html.
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    // El worker ve las páginas (para redirigir el dominio viejo); los archivos con hash de /assets van directos.
+    "run_worker_first": ["/*", "!/assets/*"]
   }
 }

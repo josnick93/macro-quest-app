@@ -4,6 +4,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import { toast, Toaster } from "sonner";
 import { BottomNav } from "@/components/BottomNav";
 import { BackupReminder } from "@/components/BackupReminder";
+import { DomainMove } from "@/components/DomainMove";
 import { SystemWindow } from "@/components/SystemWindow";
 import { TodayPage } from "@/pages/TodayPage";
 import { AddPage } from "@/pages/AddPage";
@@ -113,6 +114,7 @@ function Shell() {
       </div>
       {!onWelcome && <BottomNav />}
       {!onWelcome && <BackupReminder />}
+      <DomainMove signedIn={signedIn} />
     </>
   );
 }

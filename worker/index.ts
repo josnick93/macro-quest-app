@@ -5,10 +5,12 @@
  * - Si en España no hay resultados, busca en todo el catálogo.
  * También atiende el login (/api/auth/*, ver auth.ts) y la sincronización de datos (/api/sync, ver sync.ts).
  * Todo lo que no sea /api/* se sirve desde los archivos estáticos de la app.
+ * En el dominio viejo (workers.dev), las visitas sin sesión se redirigen a macroquestapp.com (ver src/lib/domain.ts).
  */
 import { handleAuth, type AuthEnv } from "./auth";
 import { json } from "./http";
 import { handleSync } from "./sync";
+import { legacyRedirect } from "../src/lib/domain";
 import { isBarcode, MAX_REMOTE_QUERY, MIN_REMOTE_QUERY, normalizeQuery, productUrl, searchUrl, type SearchScope } from "../src/lib/offApi";
 
 interface Env extends AuthEnv {
@@ -86,6 +88,8 @@ export function cacheKey(url: URL): string {
 export default {
   async fetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
     const url = new URL(request.url);
+    const moved = legacyRedirect(request.method, url, request.headers.get("cookie"));
+    if (moved) return Response.redirect(moved, 301);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
     if (url.pathname.startsWith("/api/auth/")) {
       try {
