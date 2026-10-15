@@ -9,16 +9,18 @@ import { defaultQuantity, formatQuantity, mergeSearch, quantityGrams, type Searc
 import { scaleMacros, totalsFor } from "@/lib/nutrition";
 import { useFoodLibrary, useSavedMeals } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { BASIC_CATEGORIES, BASIC_CATEGORY } from "@/lib/basicFoods";
 
 import { markScanned } from "@/lib/scanFlag";
 const BarcodeScanner = lazy(() => import("./BarcodeScanner").then((m) => ({ default: m.BarcodeScanner })));
 
-type Tab = "recientes" | "frecuentes" | "favoritos" | "mios" | "recetas" | "comidas";
+type Tab = "recientes" | "frecuentes" | "favoritos" | "basicos" | "mios" | "recetas" | "comidas";
 
 const GROUP_LABEL: Record<SearchGroup, string> = {
   mine: "Mis alimentos",
   recipes: "Recetas",
   history: "Historial",
+  basic: "Básicos",
   off: "Open Food Facts",
 };
 
@@ -120,6 +122,7 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
     { id: "recientes", label: "Recientes", items: lib.recents.length },
     { id: "frecuentes", label: "Frecuentes", items: lib.frequent.length },
     { id: "favoritos", label: "Favoritos", items: lib.favorites.length },
+    { id: "basicos", label: "Básicos", items: 0 },
     { id: "mios", label: "Mis alimentos", items: lib.mine.length },
     ...(diary
       ? [
@@ -133,6 +136,7 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
     recientes: lib.recents,
     frecuentes: lib.frequent,
     favoritos: lib.favorites,
+    basicos: lib.basics,
     mios: lib.mine,
     recetas: lib.recipes,
   };
@@ -175,6 +179,7 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
     recientes: "Lo que registres aparecerá aquí.",
     frecuentes: "Aquí aparecerá lo que más registras.",
     favoritos: "Marca alimentos con la estrella para tenerlos a mano.",
+    basicos: "",
     mios: "Crea alimentos con los datos de la etiqueta.",
     recetas: "Crea recetas en la pestaña Recetas.",
     comidas: "Guarda una comida desde el menú «⋯» del diario para registrarla de golpe.",
@@ -241,7 +246,7 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
           {results.length === 0 && remoteState !== "loading" && (
             <p className="text-muted-foreground py-4 text-center text-sm">Sin resultados.</p>
           )}
-          {(["mine", "recipes", "history", "off"] as SearchGroup[]).map((g) => {
+          {(["mine", "recipes", "history", "basic", "off"] as SearchGroup[]).map((g) => {
             const list = results.filter((r) => r.group === g);
             if (!list.length) return null;
             return (
@@ -277,6 +282,19 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
             );
           })}
         </ul>
+      ) : tab === "basicos" ? (
+        <div>
+          {BASIC_CATEGORIES.map((c) => {
+            const list = lib.basics.filter((f) => BASIC_CATEGORY.get(f.id) === c);
+            return (
+              <section key={c}>
+                <h3 className="label-sys mt-2">{c}</h3>
+                <ul className="divide-border/40 divide-y">{list.map(row)}</ul>
+              </section>
+            );
+          })}
+          <p className="text-muted-foreground mt-2 text-[11px]">Valores medios por 100 g en crudo salvo que se indique. Puedes corregir cualquiera.</p>
+        </div>
       ) : (
         <ul className="divide-border/40 divide-y">{tabFoods[tab].map(row)}</ul>
       )}

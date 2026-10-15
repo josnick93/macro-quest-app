@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 export function sourceLabel(food: Pick<Food, "source" | "edited">): string {
   if (food.source === "custom") return "Propio";
   if (food.source === "recipe") return "Receta";
+  if (food.source === "basic") return food.edited ? "Básico · corregido" : "Básico";
   return food.edited ? "OFF · corregido" : "Open Food Facts";
 }
 
@@ -13,7 +14,7 @@ export function SourceBadge({ food, className }: { food: Pick<Food, "source" | "
     <span
       className={cn(
         "border px-1.5 py-0.5 text-[10px] tracking-wider uppercase",
-        food.source === "off" && !food.edited ? "border-border text-muted-foreground" : "border-primary/50 text-primary",
+        (food.source === "off" || food.source === "basic") && !food.edited ? "border-border text-muted-foreground" : "border-primary/50 text-primary",
         className,
       )}
     >

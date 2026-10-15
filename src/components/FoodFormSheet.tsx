@@ -30,7 +30,8 @@ const parse = (s: string) => {
 };
 
 export function FoodFormSheet({ food, barcode, onSave, onDelete, onClose }: Props) {
-  const isOff = food?.source === "off";
+  // Producto de OFF o básico de la app: se guarda una corrección local, el original sigue ahí.
+  const isOff = food?.source === "off" || food?.source === "basic";
   const [name, setName] = useState(food?.name ?? "");
   const [brand, setBrand] = useState(food?.brand ?? "");
   const [code, setCode] = useState(food?.barcode ?? barcode ?? "");
@@ -104,7 +105,7 @@ export function FoodFormSheet({ food, barcode, onSave, onDelete, onClose }: Prop
       >
         {isOff && (
           <p className="text-muted-foreground border-border border p-2 text-[11px]">
-            Producto de Open Food Facts. Tus cambios son solo para ti y se usarán en lugar de los datos originales.
+            {food?.source === "basic" ? "Alimento básico de la app." : "Producto de Open Food Facts."} Tus cambios son solo para ti y se usarán en lugar de los datos originales.
           </p>
         )}
         <div>
