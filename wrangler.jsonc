@@ -8,6 +8,10 @@
   "keep_vars": true,
   // Registros del worker en el panel (p. ej. por qué falla un login).
   "observability": { "enabled": true },
+  // Dominio propio (comprado en Cloudflare Registrar). Cloudflare crea el DNS y el certificado. workers.dev sigue activo.
+  "routes": [{ "pattern": "macroquestapp.com", "custom_domain": true }],
+  // Con rutas propias, workers.dev hay que dejarlo activo a mano (lo usan las cuentas e instalaciones de antes).
+  "workers_dev": true,
   // Usuarios y sesiones. Sin `database_id`: Cloudflare crea la base en el primer despliegue.
   "d1_databases": [{ "binding": "DB", "database_name": "macro-quest" }],
   "assets": {
