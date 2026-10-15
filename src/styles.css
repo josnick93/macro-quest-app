@@ -178,3 +178,8 @@
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
+
+/* Banner de anuncios: si AdSense no tiene anuncio que mostrar, no deja un hueco vacío. */
+.ad-slot:has(ins[data-ad-status="unfilled"]) {
+  display: none;
+}

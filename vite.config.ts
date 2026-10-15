@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import basicSsl from "@vitejs/plugin-basic-ssl";
+import { adsTxt, parseAdsConfig } from "./src/lib/adsConfig";
 
 /**
  * Genera /sw.js al compilar, con la lista de archivos de esa versión para que la app abra sin conexión.
@@ -27,7 +28,7 @@ function serviceWorker(): Plugin {
       const publicDir = path.resolve(import.meta.dirname, "public");
       for (const name of readdirSync(publicDir).sort()) {
         if (name.startsWith("_")) continue; // _headers: configuración del alojamiento
-        if (name.endsWith(".html")) continue; // páginas legales: Cloudflare redirige /x.html a /x y siempre van a la red
+        if (name.endsWith(".html")) continue; // páginas estáticas (legales, guía): Cloudflare redirige /x.html a /x y siempre van a la red
         files.push(`/${name}`);
         hash.update(name).update(readFileSync(path.join(publicDir, name)));
       }
@@ -42,10 +43,23 @@ function serviceWorker(): Plugin {
   };
 }
 
-export default defineConfig({
+/** /ads.txt para AdSense, solo si los anuncios están configurados. */
+function adsFile(mode: string): Plugin {
+  return {
+    name: "macro-quest-ads-txt",
+    apply: "build",
+    generateBundle() {
+      const env = loadEnv(mode, import.meta.dirname, "VITE_ADSENSE_");
+      const ads = parseAdsConfig(env.VITE_ADSENSE_CLIENT, env.VITE_ADSENSE_SLOT);
+      if (ads) this.emitFile({ type: "asset", fileName: "ads.txt", source: adsTxt(ads.client) });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => ({
   // basicSsl + host:true so the camera (getUserMedia) works when testing from a phone over LAN.
   // NO_SSL=1 serves plain http (localhost is a secure context anyway).
-  plugins: [react(), tailwindcss(), ...(process.env.NO_SSL ? [] : [basicSsl()]), serviceWorker()],
+  plugins: [react(), tailwindcss(), ...(process.env.NO_SSL ? [] : [basicSsl()]), adsFile(mode), serviceWorker()],
   server: { host: true },
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
-});
+}));

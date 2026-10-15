@@ -27,7 +27,7 @@ Vite 8 · React 19 · TypeScript 5.9 · Tailwind v4 · react-router-dom 7 · Tan
 ```
 src/
   pages/        TodayPage (diario por días, ?fecha=), AddPage (?fecha=&comida=), RecipesPage, ProgressPage (lazy), CharacterPage (/ficha, lazy: ficha de personaje; se abre desde XPBar), ProfilePage,
-                WelcomePage (/bienvenida: primera vez, 3 pasos → perfil y objetivo), LoginPage (puerta de entrada)
+                WelcomePage (/bienvenida: primera vez, 3 pasos → perfil y objetivo), LoginPage (página pública y puerta de entrada)
   components/   progress/ (ventanas de Progreso: peso, informe, calendario), SystemWindow, Sheet, BarcodeScanner (lazy), FoodPicker, MacroRing, XPBar, QuestItem…
   lib/
     types.ts      Modelos (Food, Entry, Recipe, Profile, Weight, Game…)
@@ -39,6 +39,7 @@ src/
     character.ts  Ficha de personaje: atributos FUE/VIT/DIS/INT (días acumulados, nunca bajan) + forma de 30 días, títulos por nivel
     off.ts        Cliente Open Food Facts (ODbL): pregunta a /api/off/* (worker) y, si no existe o falla, a OFF directo. Mínimo 3 letras
     offApi.ts     URLs y validación de OFF, compartidas entre la app y el worker
+    ads.ts        Banner de AdSense (carga del script, aviso de consentimiento); adsConfig.ts: validación de IDs y ads.txt (también lo usa el build)
     hooks.ts      Hooks React Query sobre los repos
     diary.ts      Copiar entradas, añadido rápido
     foods.ts      Recientes/frecuentes/última cantidad (derivados del diario), raciones, búsqueda unificada
@@ -89,5 +90,7 @@ worker/         Cloudflare Worker. index.ts: /api/off/search y /api/off/product/
 - PWA: `sw.js` se genera al compilar (plugin en `vite.config.ts` + `src/sw.template.js`, sin dependencias) y precachea todos los archivos de la versión. Solo en producción; probar con `npm run build && NO_SSL=1 npm run preview`.
 - Preferencias por dispositivo (no son datos del usuario, no se exportan): localStorage `mq:*` (escaneo continuo, fecha de la última copia y del último aviso).
 - Escáner: la cámara en directo en iOS requiere HTTPS; por http en la red local funciona el botón "Hacer foto".
+- Anuncios: un solo banner 320×50 (`AdBanner`) al final de Hoy y Progreso; nunca en Añadir, escáner, bienvenida ni login. Solo en producción y con `VITE_ADSENSE_CLIENT` + `VITE_ADSENSE_SLOT` al compilar (sin ellos no se carga nada de Google y no se genera `ads.txt`). El consentimiento RGPD lo muestra AdSense («Privacidad y mensajes»); se reabre desde Perfil → Datos.
+- Páginas estáticas en `public/` (privacidad, condiciones, guía): el service worker no las intercepta (`LEGAL` en `sw.template.js`); una nueva hay que añadirla ahí.
 - Deploy: Cloudflare Workers (`wrangler.jsonc`: worker en `worker/index.ts` para `/api/*`, sirve `dist`, fallback SPA con `not_found_handling`). Build `npm run build`, deploy `npx wrangler deploy`. No usar `_redirects` con `/* /index.html 200`: en Workers se rechaza por bucle.
 - Backend futuro: Go o PocketBase en una Orange Pi expuesta con Cloudflare Tunnel.
