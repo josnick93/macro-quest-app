@@ -31,6 +31,13 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   },
 ];
 
+/** Páginas estáticas de public/ (se leen sin cuenta). */
+const GUIDES = [
+  { href: "/guia", title: "Calorías y macros", text: "De dónde salen tu gasto, tu objetivo y el reparto de macros, con un ejemplo." },
+  { href: "/proteina", title: "Proteína: cuánta y de dónde", text: "Cuánta necesitas según tu objetivo y qué alimentos dan más por caloría." },
+  { href: "/etiquetas", title: "Cómo leer una etiqueta", text: "La tabla nutricional, las frases del envase y el Nutri-Score, sin trampas." },
+];
+
 const STEPS = [
   "Entra con tu cuenta de Google.",
   "Rellena tu perfil en tres pasos: la app calcula tus kcal y macros.",
@@ -106,12 +113,22 @@ export function LoginPage({ offline, onRetry }: { offline: boolean; onRetry: () 
             </li>
           ))}
         </ol>
-        <p className="text-muted-foreground mt-3 px-1 text-sm">
-          ¿Quieres entender de dónde salen los números?{" "}
-          <a className="text-primary inline-flex items-center gap-1 underline" href="/guia">
-            <BookOpen className="h-3.5 w-3.5" aria-hidden /> Guía de calorías y macros
-          </a>
-        </p>
+      </Section>
+
+      <Section title="Guías">
+        <ul className="space-y-2">
+          {GUIDES.map((g) => (
+            <li key={g.href}>
+              <a href={g.href} className="system-window flex min-h-12 items-center gap-3 p-4">
+                <BookOpen className="text-primary h-5 w-5 shrink-0" aria-hidden />
+                <span>
+                  <span className="block font-semibold">{g.title}</span>
+                  <span className="text-muted-foreground block text-sm">{g.text}</span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
       </Section>
 
       <SystemWindow scan={false}>
@@ -123,10 +140,14 @@ export function LoginPage({ offline, onRetry }: { offline: boolean; onRetry: () 
       </SystemWindow>
 
       <footer className="text-muted-foreground text-center text-[11px]">
-        <a className="underline" href="/guia">
-          Guía
-        </a>
-        {" · "}
+        {GUIDES.map((g) => (
+          <span key={g.href}>
+            <a className="underline" href={g.href}>
+              {g.title}
+            </a>
+            {" · "}
+          </span>
+        ))}
         <a className="underline" href="/privacidad">
           Privacidad
         </a>
