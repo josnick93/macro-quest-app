@@ -39,6 +39,7 @@ function NotFound() {
 }
 
 const WELCOME = "/bienvenida";
+const SAFE_TOP = "calc(env(safe-area-inset-top) + 16px)";
 
 /** Resultado del login al volver de Google: se muestra una vez y se limpia de la URL. */
 function useLoginResult() {
@@ -98,7 +99,7 @@ function Shell() {
   }
   return (
     <>
-      <div className={`mx-auto min-h-screen w-full max-w-lg px-4 pt-5 ${onWelcome ? "pb-8" : "pb-24"}`}>
+      <div className={`mx-auto min-h-[calc(100dvh-env(safe-area-inset-top))] w-full max-w-lg px-4 pt-5 ${onWelcome ? "pb-8" : "pb-24"}`}>
         <Routes>
           <Route path="/" element={<TodayPage />} />
           <Route path="/anadir" element={<AddPage />} />
@@ -121,7 +122,8 @@ export default function App() {
     <QueryClientProvider client={qc}>
       <BrowserRouter>
         <Shell />
-        <Toaster position="top-center" theme="dark" />
+        {/* Los avisos van fijos arriba: también bajo la isla/notch del iPhone. */}
+        <Toaster position="top-center" theme="dark" offset={{ top: SAFE_TOP }} mobileOffset={{ top: SAFE_TOP }} />
       </BrowserRouter>
     </QueryClientProvider>
   );
