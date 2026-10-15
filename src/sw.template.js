@@ -3,7 +3,8 @@ const CACHE = "mq-__VERSION__";
 const FONTS = "mq-fonts";
 const FILES = "__FILES__";
 const SHELL = "/";
-const LEGAL = ["/privacidad", "/condiciones"];
+// Páginas estáticas (legales y guía): siempre de la red, nunca la app.
+const LEGAL = ["/privacidad", "/condiciones", "/guia"];
 // ignoreVary: el servidor puede responder con "Vary: Origin" y la petición de la página (crossorigin) no coincidiría.
 const MATCH = { cacheName: CACHE, ignoreVary: true };
 
