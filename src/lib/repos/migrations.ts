@@ -106,7 +106,8 @@ function servings(v: unknown): Serving[] | undefined {
 }
 
 function source(v: Obj, id: string): FoodSource {
-  if (v.source === "off" || v.source === "custom" || v.source === "recipe") return v.source;
+  if (v.source === "off" || v.source === "basic" || v.source === "custom" || v.source === "recipe") return v.source;
+  if (id.startsWith("base:")) return "basic";
   if (v.custom === true || id.startsWith("custom:")) return "custom"; // v1
   if (id.startsWith("recipe:")) return "recipe";
   return "off";

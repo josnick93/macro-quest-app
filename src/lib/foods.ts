@@ -19,7 +19,7 @@ export function foodFromEntry(e: DiaryEntry): Food {
     name: e.name,
     brand: e.brand,
     per100g: e.per100g,
-    source: e.kind === "recipe" ? "recipe" : e.foodId?.startsWith("custom:") ? "custom" : "off",
+    source: e.kind === "recipe" ? "recipe" : e.foodId?.startsWith("custom:") ? "custom" : e.foodId?.startsWith("base:") ? "basic" : "off",
   };
 }
 
@@ -128,22 +128,26 @@ export function matchesQuery(food: Pick<Food, "name" | "brand">, query: string):
   return words.every((w) => hay.includes(w));
 }
 
-export type SearchGroup = "mine" | "recipes" | "history" | "off";
+export type SearchGroup = "mine" | "recipes" | "history" | "basic" | "off";
 
 export interface SearchResult {
   food: Food;
   group: SearchGroup;
 }
 
+/** Primero lo que empieza por lo buscado ("pera" antes que "pimiento… pera"), luego lo más usado. */
+const startsWith = (f: Food, query: string) => (normalizeText(f.name).startsWith(normalizeText(query)) ? 0 : 1);
+
 /**
- * Búsqueda unificada: mis alimentos → recetas → historial → Open Food Facts.
+ * Búsqueda unificada: mis alimentos → recetas → historial → básicos → Open Food Facts.
  * Un resultado de OFF que ya está guardado en local (quizá corregido) se muestra con la versión local.
  */
 export function mergeSearch(query: string, local: Food[], remote: Food[], usage: Record<string, number> = {}): SearchResult[] {
-  const byUse = (a: Food, b: Food) => (usage[b.id] ?? 0) - (usage[a.id] ?? 0);
+  const byUse = (a: Food, b: Food) => startsWith(a, query) - startsWith(b, query) || (usage[b.id] ?? 0) - (usage[a.id] ?? 0);
   const hits = local.filter((f) => matchesQuery(f, query)).sort(byUse);
-  const group = (f: Food): SearchGroup => (f.source === "custom" ? "mine" : f.source === "recipe" ? "recipes" : "history");
-  const order: SearchGroup[] = ["mine", "recipes", "history"];
+  const group = (f: Food): SearchGroup =>
+    f.source === "custom" ? "mine" : f.source === "recipe" ? "recipes" : f.source === "basic" && !usage[f.id] ? "basic" : "history";
+  const order: SearchGroup[] = ["mine", "recipes", "history", "basic"];
   const out: SearchResult[] = order.flatMap((g) => hits.filter((f) => group(f) === g).map((food) => ({ food, group: g })));
   const seen = new Set(out.map((r) => r.food.id));
   const localById = new Map(local.map((f) => [f.id, f]));

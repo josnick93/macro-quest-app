@@ -8,6 +8,7 @@ import { activeAccount, deleteAccount, loadSession, logout, rememberAccount, rem
 import { DEFAULT_GAME, DEFAULT_PROFILE, DEFAULT_SETTINGS } from "./repos/local";
 import type { DayNote, DiaryEntry, Food, GameState, NewEntry, Profile, Recipe, SavedMeal, Settings, Targets, WeightLog } from "./types";
 import { foodStats, knownFoods, recipeAsFood, resolveFoods, type FoodStats } from "./foods";
+import { withBasics } from "./basicFoods";
 import { calcTargets, totalsFor } from "./nutrition";
 import { estimateTdee, kcalByDay, TDEE_WINDOW_DAYS, type TdeeEstimate } from "./goals";
 import { dailyQuests, shieldedStreak, syncDayXp, weekStartISO, type Quest } from "./xp";
@@ -160,7 +161,9 @@ export interface FoodLibrary {
   favorites: Food[];
   mine: Food[];
   recipes: Food[];
-  /** Lo que se busca en local: almacén + recetas. */
+  /** Básicos de la app (con las correcciones del usuario). */
+  basics: Food[];
+  /** Lo que se busca en local: almacén + básicos + recetas. */
   local: Food[];
 }
 
@@ -171,7 +174,8 @@ export function useFoodLibrary(): FoodLibrary {
   const { data: favIds } = useFavoriteIds();
   const { data: entries } = useDiaryRange(addDaysISO(today, -STATS_DAYS), today);
   return useMemo(() => {
-    const known = knownFoods(foods, recipes);
+    const all = withBasics(foods);
+    const known = knownFoods(all, recipes);
     const stats = foodStats(entries);
     const recipeFoods = recipes.map(recipeAsFood);
     return {
@@ -182,7 +186,8 @@ export function useFoodLibrary(): FoodLibrary {
       favorites: resolveFoods(favIds, known, stats.lastEntry),
       mine: foods.filter((f) => f.source === "custom").sort((a, b) => a.name.localeCompare(b.name, "es")),
       recipes: recipeFoods,
-      local: [...foods, ...recipeFoods],
+      basics: all.filter((f) => f.source === "basic"),
+      local: [...all, ...recipeFoods],
     };
   }, [foods, recipes, favIds, entries]);
 }

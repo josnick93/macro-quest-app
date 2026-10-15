@@ -39,8 +39,8 @@ export interface Serving {
   grams: number;
 }
 
-/** off: Open Food Facts · custom: creado por el usuario · recipe: receta propia. */
-export type FoodSource = "off" | "custom" | "recipe";
+/** off: Open Food Facts · basic: básico incluido en la app (lib/basicFoods.ts) · custom: creado por el usuario · recipe: receta propia. */
+export type FoodSource = "off" | "basic" | "custom" | "recipe";
 
 /** Alimento normalizado (valores por 100 g). */
 export interface Food {
@@ -51,7 +51,7 @@ export interface Food {
   per100g: Nutrients;
   servings?: Serving[] | undefined;
   source: FoodSource;
-  /** Datos de Open Food Facts corregidos a mano por el usuario. */
+  /** Datos de Open Food Facts o de un básico corregidos a mano por el usuario. */
   edited?: boolean | undefined;
   updatedAt?: string;
 }
