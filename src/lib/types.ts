@@ -154,6 +154,8 @@ export interface Profile {
 export interface Settings {
   /** Comidas ocultas en el diario (se muestran igualmente si tienen entradas). */
   hiddenMeals: MealType[];
+  /** Supermercados habituales (ids de lib/stores.ts): sus productos salen primero al buscar. */
+  stores: string[];
 }
 
 export interface GameState {
