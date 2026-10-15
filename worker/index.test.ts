@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheKey, product, route, search, upstream } from "./index";
+import worker, { cacheKey, product, route, search, upstream } from "./index";
 
 const noWait = () => Promise.resolve();
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -94,5 +94,23 @@ describe("rutas y caché", () => {
   });
   it("la clave de caché ignora mayúsculas, espacios y parámetros ajenos", () => {
     expect(cacheKey(new URL("https://app/api/off/search?q=%20Yogur%20%20Griego&x=1"))).toBe(cacheKey(new URL("https://app/api/off/search?q=yogur+griego")));
+  });
+});
+
+describe("dominio viejo", () => {
+  const assets = { fetch: async () => new Response("app", { status: 200 }) };
+  const env = { ASSETS: assets } as unknown as Parameters<typeof worker.fetch>[1];
+  const ctx = { waitUntil: () => {} };
+  const OLD = "https://macro-quest-app.josecaudevilla93.workers.dev";
+
+  it("sin sesión redirige a macroquestapp.com con un 301", async () => {
+    const res = await worker.fetch(new Request(`${OLD}/proteina?x=1`), env, ctx);
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("https://macroquestapp.com/proteina?x=1");
+  });
+  it("con sesión, y en el dominio nuevo, sirve la app", async () => {
+    const signed = new Request(`${OLD}/`, { headers: { cookie: "__Host-mq_session=abc" } });
+    expect(await (await worker.fetch(signed, env, ctx)).text()).toBe("app");
+    expect(await (await worker.fetch(new Request("https://macroquestapp.com/"), env, ctx)).text()).toBe("app");
   });
 });
