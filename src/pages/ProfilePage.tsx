@@ -16,6 +16,7 @@ import { BACKUP_EVERY_DAYS, daysSince, lastBackup, markBackup } from "@/lib/back
 import { cn } from "@/lib/utils";
 import { ADS, showAdsConsent } from "@/lib/ads";
 import { diaryCsv } from "@/lib/csv";
+import { STORES } from "@/lib/stores";
 
 const WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const WEEKDAY_STEP = 50;
@@ -38,6 +39,8 @@ export function ProfilePage() {
     if (hidden.length === MEALS.length) return toast.error("Deja al menos una comida visible");
     saveSettings.mutate({ ...settings, hiddenMeals: hidden });
   };
+  const toggleStore = (id: string) =>
+    saveSettings.mutate({ ...settings, stores: settings.stores.includes(id) ? settings.stores.filter((s) => s !== id) : [...settings.stores, id] });
   const [p, setP] = useState<Profile>(data);
   useEffect(() => setP(data), [data]);
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setP((x) => ({ ...x, [k]: v }));
@@ -318,6 +321,26 @@ export function ProfilePage() {
           })}
         </div>
         <p className="text-muted-foreground mt-3 text-[11px]">Las ocultas siguen apareciendo en el diario si tienen algo registrado.</p>
+      </SystemWindow>
+
+      <SystemWindow title="Tus supermercados" scan={false}>
+        <div className="grid grid-cols-4 gap-2">
+          {STORES.map((s) => {
+            const on = settings.stores.includes(s.id);
+            return (
+              <button
+                key={s.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleStore(s.id)}
+                className={cn("min-h-11 border text-xs", on ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground")}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-muted-foreground mt-3 text-[11px]">Al buscar en Open Food Facts, sus productos (y sus marcas propias) salen primero.</p>
       </SystemWindow>
 
       <AccountWindow />

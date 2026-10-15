@@ -210,8 +210,20 @@ describe("registros llegados de la sincronización", () => {
     expect(normalizeRecord("recipes", "texto")).toBeNull();
   });
   it("ajustes, favoritos y juego se validan igual", () => {
-    expect(normalizeSettings({ hiddenMeals: ["cena", "inventada"] })).toEqual({ hiddenMeals: ["cena"] });
+    expect(normalizeSettings({ hiddenMeals: ["cena", "inventada"] })).toEqual({ hiddenMeals: ["cena"], stores: [] });
     expect(normalizeFavorites(["a", "a", 3, "", "b"])).toEqual(["a", "b"]);
     expect(normalizeGame({ xp: -5, awarded: ["k", 1], activeDays: ["2026-10-02", "mal"] })).toEqual({ xp: 0, activeDays: ["2026-10-02"], awarded: ["k"], history: [], achievements: {} });
+  });
+});
+
+describe("esquema v5: supermercados habituales y alimentos básicos", () => {
+  it("unos ajustes de antes se leen sin supermercados y sin perder lo demás", () => {
+    expect(normalizeSettings({ hiddenMeals: ["snacks"] })).toEqual({ hiddenMeals: ["snacks"], stores: [] });
+    const imported = parseImport({ app: "macro-quest", schema: 4, data: { settings: { hiddenMeals: ["snacks"] } } }, NOW);
+    expect(imported.settings).toEqual({ hiddenMeals: ["snacks"], stores: [] });
+    expect(SCHEMA_VERSION).toBe(5);
+  });
+  it("guarda solo cadenas conocidas y sin repetir", () => {
+    expect(normalizeSettings({ hiddenMeals: [], stores: ["mercadona", "lidl", "mercadona", "inventado", 3] }).stores).toEqual(["mercadona", "lidl"]);
   });
 });

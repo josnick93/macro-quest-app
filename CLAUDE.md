@@ -40,6 +40,8 @@ src/
     character.ts  Ficha de personaje: atributos FUE/VIT/DIS/INT (días acumulados, nunca bajan) + forma de 30 días, títulos por nivel
     off.ts        Cliente Open Food Facts (ODbL): pregunta a /api/off/* (worker) y, si no existe o falla, a OFF directo. Mínimo 3 letras
     offApi.ts     URLs y validación de OFF, compartidas entre la app y el worker
+    basicFoods.ts Alimentos básicos sin marca incluidos en la app (id `base:<nombre>`, no cambiar ids publicados); una corrección del usuario los sustituye (`withBasics`)
+    stores.ts     Supermercados habituales (ajuste `stores`): sus productos y marcas propias salen primero al buscar en OFF
     ads.ts        Banner de AdSense (carga del script, aviso de consentimiento); adsConfig.ts: validación de IDs y ads.txt (también lo usa el build)
     hooks.ts      Hooks React Query sobre los repos
     diary.ts      Copiar entradas, añadido rápido

@@ -1,13 +1,14 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, PackagePlus, Plus, ScanBarcode, Search, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { MacroLine } from "./MacroLine";
 import type { Food, SavedMeal } from "@/lib/types";
-import { getFoodByBarcode, MIN_REMOTE_QUERY, searchFoods } from "@/lib/off";
+import { getFoodByBarcode, MIN_REMOTE_QUERY, searchFoods, type OffHit } from "@/lib/off";
+import { rankByStores, storesOf, STORES } from "@/lib/stores";
 import { repos } from "@/lib/repos";
 import { defaultQuantity, formatQuantity, mergeSearch, quantityGrams, type SearchGroup } from "@/lib/foods";
 import { scaleMacros, totalsFor } from "@/lib/nutrition";
-import { useFoodLibrary, useSavedMeals } from "@/lib/hooks";
+import { useFoodLibrary, useSavedMeals, useSettings } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { BASIC_CATEGORIES, BASIC_CATEGORY } from "@/lib/basicFoods";
 
@@ -50,7 +51,8 @@ type RemoteState = "idle" | "loading" | "offline" | "error";
 export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, onPickSavedMeal, scanResume }: Props) {
   const diary = mode === "diary";
   const [q, setQ] = useState("");
-  const [remote, setRemote] = useState<Food[]>([]);
+  const [hits, setHits] = useState<OffHit[]>([]);
+  const { data: settings } = useSettings();
   const [remoteState, setRemoteState] = useState<RemoteState>("idle");
   const [scanning, setScanning] = useState(false);
   const [continuous, setContinuous] = useState(readContinuous);
@@ -63,14 +65,14 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
 
   // Búsqueda remota con debounce; los resultados locales se muestran al instante.
   useEffect(() => {
-    setRemote([]);
+    setHits([]);
     if (term.length < MIN_REMOTE_QUERY) return setRemoteState("idle");
     if (!navigator.onLine) return setRemoteState("offline");
     const ctrl = new AbortController();
     setRemoteState("loading");
     const t = setTimeout(async () => {
       try {
-        setRemote(await searchFoods(term, ctrl.signal));
+        setHits(await searchFoods(term, ctrl.signal));
         setRemoteState("idle");
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
@@ -141,7 +143,13 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
     recetas: lib.recipes,
   };
   const localPool = diary ? lib.local : lib.local.filter((f) => f.source !== "recipe");
-  const results = searching ? mergeSearch(term, localPool, remote, lib.stats.count) : [];
+  // Tus supermercados primero; se recuerda en qué cadena está cada producto para mostrarlo en la fila.
+  const ranked = useMemo(() => rankByStores(hits, settings.stores), [hits, settings.stores]);
+  const storeOf = useMemo(
+    () => new Map(ranked.map((h) => [h.food.id, storesOf(h.stores, settings.stores).map((id) => STORES.find((s) => s.id === id)!.label)])),
+    [ranked, settings.stores],
+  );
+  const results = searching ? mergeSearch(term, localPool, ranked.map((h) => h.food), lib.stats.count) : [];
 
   const row = (f: Food) => {
     const qty = defaultQuantity(f, lib.stats.lastGrams[f.id]);
@@ -153,6 +161,7 @@ export function FoodPicker({ mode = "diary", onPick, onQuickAdd, onCreateFood, o
             <span className="block truncate text-xs">
               {f.brand && <span className="text-muted-foreground">{f.brand} · </span>}
               {f.edited && <span className="text-primary">corregido · </span>}
+              {!!storeOf.get(f.id)?.length && <span className="text-primary">{storeOf.get(f.id)!.join(", ")} · </span>}
               {/* Macros de la cantidad que añade el «+» (ración habitual), no por 100 g. */}
               <MacroLine m={scaleMacros(f.per100g, quantityGrams(qty))} />
             </span>

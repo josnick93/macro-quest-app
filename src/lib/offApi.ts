@@ -7,6 +7,7 @@ export const OFF_FIELDS = [
   "product_name",
   "product_name_es",
   "brands",
+  "stores",
   "nutriments",
   "serving_size",
   "serving_quantity",

@@ -13,6 +13,7 @@ export interface OffProduct {
   product_name?: string;
   product_name_es?: string;
   brands?: string;
+  stores?: string;
   nutriments?: Record<string, number | string | undefined>;
   serving_size?: string;
   serving_quantity?: number | string;
@@ -122,20 +123,31 @@ async function searchDirect(q: string, signal?: AbortSignal): Promise<OffProduct
   return [];
 }
 
+/** Resultado de búsqueda: el alimento y sus marcas y tiendas en OFF (para poner primero tus supermercados). */
+export interface OffHit {
+  food: Food;
+  stores: string;
+}
+
 /** Caché en memoria de búsquedas (la sesión dura poco en móvil; basta para no repetir peticiones). */
-const cache = new Map<string, Food[]>();
+const cache = new Map<string, OffHit[]>();
 const CACHE_MAX = 60;
 
-export async function searchFoods(query: string, signal?: AbortSignal): Promise<Food[]> {
+export async function searchFoods(query: string, signal?: AbortSignal): Promise<OffHit[]> {
   const q = normalizeQuery(query);
   if (q.length < MIN_REMOTE_QUERY) return [];
   const hit = cache.get(q);
   if (hit) return hit;
   const proxied = await viaProxy<{ products?: OffProduct[] }>(`/api/off/search?q=${encodeURIComponent(q)}`, signal);
   const products = proxied?.products ?? (await searchDirect(q, signal));
-  const foods = products.map(toFood).filter((f): f is Food => f !== null);
   const seen = new Set<string>();
-  const out = foods.filter((f) => (seen.has(f.id) ? false : (seen.add(f.id), true))).slice(0, 20);
+  const out = products
+    .flatMap((p) => {
+      const food = toFood(p);
+      return food ? [{ food, stores: `${p.brands ?? ""}, ${p.stores ?? ""}` }] : [];
+    })
+    .filter((h) => (seen.has(h.food.id) ? false : (seen.add(h.food.id), true)))
+    .slice(0, 20);
   cache.set(q, out);
   if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
   return out;

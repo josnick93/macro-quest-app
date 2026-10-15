@@ -15,12 +15,15 @@ import {
   type WeightLog,
 } from "../types";
 import { formulaTDEE, KCAL_PER_KG } from "../nutrition";
+import { isStoreId } from "../stores";
 
 /**
  * Versión del esquema de datos. Si cambia la forma de algo guardado:
  * sube este número y añade un paso en MIGRATIONS. Nunca se pierden datos.
  */
-export const SCHEMA_VERSION = 4;
+// v5: `settings.stores` (supermercados habituales) y alimentos básicos (`source: "basic"`). Sin paso: la normalización
+// rellena lo que falta.
+export const SCHEMA_VERSION = 5;
 
 export const LEGACY_PREFIX = "sysnutri:";
 
@@ -37,7 +40,7 @@ export const DEFAULT_PROFILE: Profile = {
 };
 
 export const DEFAULT_GAME: GameState = { xp: 0, activeDays: [], awarded: [], history: [], achievements: {} };
-export const DEFAULT_SETTINGS: Settings = { hiddenMeals: [] };
+export const DEFAULT_SETTINGS: Settings = { hiddenMeals: [], stores: [] };
 
 /**
  * Todos los datos del usuario. Es también el formato de exportación.
@@ -247,7 +250,7 @@ export function normalizeProfile(v: unknown): Profile {
 
 function settings(v: unknown): Settings {
   if (!isObj(v)) return { ...DEFAULT_SETTINGS };
-  return { hiddenMeals: arr(v.hiddenMeals).filter(isMealType) };
+  return { hiddenMeals: arr(v.hiddenMeals).filter(isMealType), stores: [...new Set(arr(v.stores).filter(isStoreId))] };
 }
 
 function game(v: unknown, diary: DiaryEntry[]): GameState {

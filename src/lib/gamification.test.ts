@@ -151,7 +151,7 @@ describe("esquema v4: logros en el estado de juego", () => {
     expect(normalizeGame(v3)).toEqual({ ...v3, achievements: {} });
     const imported = parseImport({ app: "macro-quest", schema: 3, data: { game: v3 } }, NOW);
     expect(imported.game).toEqual({ ...v3, achievements: {} });
-    expect(SCHEMA_VERSION).toBe(4);
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(4);
   });
   it("conserva los logros guardados y descarta valores corruptos", () => {
     expect(normalizeGame({ xp: 10, achievements: { "streak-7": NOW, roto: 5, vacio: "" } }).achievements).toEqual({ "streak-7": NOW });
