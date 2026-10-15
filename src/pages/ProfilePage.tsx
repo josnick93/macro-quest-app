@@ -14,6 +14,7 @@ import { ImportError, parseImport, SCHEMA_VERSION, type ExportFile } from "@/lib
 import { addDaysISO, todayISO } from "@/lib/date";
 import { BACKUP_EVERY_DAYS, daysSince, lastBackup, markBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
+import { ADS, showAdsConsent } from "@/lib/ads";
 
 const WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const WEEKDAY_STEP = 50;
@@ -335,6 +336,11 @@ export function ProfilePage() {
           <a className="text-primary underline" href="https://openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a>{" "}
           (licencia ODbL).
         </p>
+        {ADS && (
+          <button type="button" className="text-primary mt-2 text-[11px] underline" onClick={showAdsConsent}>
+            Preferencias de anuncios
+          </button>
+        )}
       </SystemWindow>
 
       {dirty && (

@@ -1,3 +1,4 @@
+import { AdBanner } from "@/components/AdBanner";
 import { SystemWindow } from "@/components/SystemWindow";
 import { XPBar } from "@/components/XPBar";
 import { CalendarWindow } from "@/components/progress/CalendarWindow";
@@ -41,6 +42,8 @@ export function ProgressPage() {
           </div>
         </div>
       </SystemWindow>
+
+      <AdBanner />
     </div>
   );
 }

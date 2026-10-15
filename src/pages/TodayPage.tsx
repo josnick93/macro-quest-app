@@ -13,6 +13,7 @@ import { EntrySheet } from "@/components/EntrySheet";
 import { MacroLine } from "@/components/MacroLine";
 import { DatePager } from "@/components/DatePager";
 import { DayNote } from "@/components/DayNote";
+import { AdBanner } from "@/components/AdBanner";
 import { QuickAddSheet } from "@/components/QuickAddSheet";
 import { CopyMealSheet } from "@/components/CopyMealSheet";
 import { MealActionsSheet } from "@/components/MealActionsSheet";
@@ -263,6 +264,8 @@ export function TodayPage() {
       <SystemWindow title="Nota del día" scan={false}>
         <DayNote key={date} date={date} />
       </SystemWindow>
+
+      <AdBanner />
 
       {panel?.type === "entry" && (
         <EntrySheet
