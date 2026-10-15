@@ -33,7 +33,8 @@ src/
     types.ts      Modelos (Food, Entry, Recipe, Profile, Weight, Game…)
     nutrition.ts  Basal (Mifflin / Katch-McArdle con % de grasa), gasto, objetivos por día, % grasa (método Marina), macros de recetas
     goals.ts      Escenarios definición/mantenimiento/volumen, avisos de salud, plazo al peso objetivo, gasto real (TDEE adaptativo)
-    progress.ts   Progreso: media móvil y ritmo del peso, proyección al objetivo, informe del periodo, calendario del mes
+    progress.ts   Progreso: media móvil y ritmo del peso, proyección al objetivo, informe del periodo (con medias de micros), calendario del mes
+    csv.ts        Diario en CSV para Excel en español («;», coma decimal, BOM, sin fórmulas)
     xp.ts         Misiones diarias, XP, niveles, racha con escudo, tabla de XP de semanales y logros, unión del juego entre dispositivos
     gamification.ts Misiones semanales y logros (definición, condiciones y reparto de XP)
     character.ts  Ficha de personaje: atributos FUE/VIT/DIS/INT (días acumulados, nunca bajan) + forma de 30 días, títulos por nivel

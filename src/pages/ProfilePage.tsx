@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
 import { SystemWindow } from "@/components/SystemWindow";
@@ -15,6 +15,7 @@ import { addDaysISO, todayISO } from "@/lib/date";
 import { BACKUP_EVERY_DAYS, daysSince, lastBackup, markBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
 import { ADS, showAdsConsent } from "@/lib/ads";
+import { diaryCsv } from "@/lib/csv";
 
 const WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const WEEKDAY_STEP = 50;
@@ -68,15 +69,28 @@ export function ProfilePage() {
 
   const [backupDays, setBackupDays] = useState(() => daysSince(lastBackup(), Date.now()));
 
+  const saveFile = (blob: Blob, name: string) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  const exportCsv = async () => {
+    try {
+      const entries = await repos.diary.listRange("0000-01-01", "9999-12-31");
+      if (!entries.length) return toast.info("Aún no hay nada en el diario");
+      saveFile(new Blob([diaryCsv(entries)], { type: "text/csv;charset=utf-8" }), `macro-quest-diario-${todayISO()}.csv`);
+    } catch (e) {
+      toast.error(`No se pudo exportar: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   const exportData = async () => {
     try {
       const file: ExportFile = { app: "macro-quest", schema: SCHEMA_VERSION, exportedAt: new Date().toISOString(), data: await repos.data.exportAll() };
-      const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `macro-quest-${todayISO()}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      saveFile(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }), `macro-quest-${todayISO()}.json`);
       markBackup();
       setBackupDays(0);
     } catch (e) {
@@ -322,6 +336,9 @@ export function ProfilePage() {
               if (f) importData(f);
             }} />
           </label>
+          <button className="btn-ghost col-span-2" onClick={exportCsv}>
+            <FileSpreadsheet className="h-4 w-4" /> Diario en CSV (Excel)
+          </button>
         </div>
         <p className="text-muted-foreground mt-3 text-[11px]">
           {account
