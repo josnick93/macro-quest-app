@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, dayStats, dayStatus, formatMonth, monthEnd, monthGrid, projectTarget, report, weightSeries, weightTrend } from "./progress";
+import { addMonths, dayStats, dayStatus, formatMonth, microAverages, monthEnd, monthGrid, projectTarget, report, weightSeries, weightTrend } from "./progress";
 import type { DiaryEntry, MealType, Targets, WeightLog } from "./types";
 
 const target: Targets = { bmr: 1800, tdee: 2500, kcal: 2000, protein: 150, carbs: 200, fat: 60 };
@@ -110,7 +110,23 @@ describe("informe", () => {
 
   it("sin registros no divide por cero", () => {
     const empty = report([], dayStats([], "2026-10-01", "2026-10-07", targetsFor));
-    expect(empty).toMatchObject({ days: 7, logged: 0, met: 0, avg: { kcal: 0 }, meals: [], top: [] });
+    expect(empty).toMatchObject({ days: 7, logged: 0, met: 0, avg: { kcal: 0 }, meals: [], top: [], micros: [] });
+  });
+
+  it("medias de micros por día registrado, con la parte de las kcal que trae el dato", () => {
+    const withMicros = [
+      entry("2026-10-01", "desayuno", 300, { per100g: { kcal: 300, protein: 0, carbs: 0, fat: 0, fiber: 10, salt: 1 }, grams: 100 }),
+      entry("2026-10-01", "comida", 700),
+      entry("2026-10-02", "desayuno", 300, { per100g: { kcal: 300, protein: 0, carbs: 0, fat: 0, fiber: 10 }, grams: 200 }),
+      entry("2026-10-02", "comida", 700),
+    ];
+    const m = microAverages(withMicros, 2);
+    // Fibra: (10 + 20) / 2 días; viene de 900 de 2300 kcal. Sal solo de 300. Azúcares y saturada: sin datos.
+    expect(m).toEqual([
+      { key: "fiber", label: "Fibra", avg: 15, coverage: 39 },
+      { key: "salt", label: "Sal", avg: 0.5, coverage: 13 },
+    ]);
+    expect(microAverages(withMicros, 0)).toEqual([]);
   });
 });
 
