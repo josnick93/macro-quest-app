@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adsScriptUrl, adsTxt, parseAdsConfig } from "./adsConfig";
+import { adsScriptUrl, adsTxt, parseAdsClient, parseAdsConfig } from "./adsConfig";
 
 describe("configuración de anuncios", () => {
   it("sin valores o mal escritos no hay anuncios", () => {
@@ -17,5 +17,11 @@ describe("configuración de anuncios", () => {
   it("ads.txt y URL del script", () => {
     expect(adsTxt("ca-pub-1234567890123456")).toBe("google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n");
     expect(adsScriptUrl("ca-pub-1")).toBe("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1");
+  });
+
+  it("el ID de editor solo basta para verificar el sitio y ads.txt", () => {
+    expect(parseAdsClient("ca-pub-1234567890123456")).toBe("ca-pub-1234567890123456");
+    expect(parseAdsClient("pub-1234567890123456")).toBeNull();
+    expect(parseAdsClient(undefined)).toBeNull();
   });
 });
