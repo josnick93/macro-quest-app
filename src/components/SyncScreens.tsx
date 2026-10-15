@@ -6,7 +6,7 @@ import { syncNow, useLogout, useSyncPending, useWipeLocal } from "@/lib/hooks";
 import { useSyncStatus } from "@/lib/syncStatus";
 
 const Frame = ({ children }: { children: React.ReactNode }) => (
-  <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-4 py-8">{children}</div>
+  <div className="mx-auto flex min-h-[calc(100dvh-env(safe-area-inset-top))] w-full max-w-lg flex-col justify-center px-4 py-8">{children}</div>
 );
 
 /** Primera sincronización en un dispositivo sin perfil: se espera a ver si los datos ya están en la nube. */
