@@ -5,7 +5,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import basicSsl from "@vitejs/plugin-basic-ssl";
-import { adsTxt, parseAdsConfig } from "./src/lib/adsConfig.ts";
+import { adsTxt, parseAdsClient } from "./src/lib/adsConfig.ts";
 
 /**
  * Genera /sw.js al compilar, con la lista de archivos de esa versión para que la app abra sin conexión.
@@ -43,15 +43,31 @@ function serviceWorker(): Plugin {
   };
 }
 
-/** /ads.txt para AdSense, solo si los anuncios están configurados. */
+/** /ads.txt para AdSense, en cuanto hay ID de editor. */
 function adsFile(mode: string): Plugin {
   return {
     name: "macro-quest-ads-txt",
     apply: "build",
     generateBundle() {
       const env = loadEnv(mode, import.meta.dirname, "VITE_ADSENSE_");
-      const ads = parseAdsConfig(env.VITE_ADSENSE_CLIENT, env.VITE_ADSENSE_SLOT);
-      if (ads) this.emitFile({ type: "asset", fileName: "ads.txt", source: adsTxt(ads.client) });
+      const client = parseAdsClient(env.VITE_ADSENSE_CLIENT);
+      if (client) this.emitFile({ type: "asset", fileName: "ads.txt", source: adsTxt(client) });
+    },
+  };
+}
+
+/**
+ * Verificación del sitio en AdSense: la etiqueta `google-adsense-account` en la página principal.
+ * El script de anuncios solo se carga dentro de la app (tras el login), así que el revisor no lo vería.
+ */
+function adsVerification(mode: string): Plugin {
+  return {
+    name: "macro-quest-ads-verification",
+    apply: "build",
+    transformIndexHtml() {
+      const env = loadEnv(mode, import.meta.dirname, "VITE_ADSENSE_");
+      const client = parseAdsClient(env.VITE_ADSENSE_CLIENT);
+      return client ? [{ tag: "meta", attrs: { name: "google-adsense-account", content: client }, injectTo: "head" }] : [];
     },
   };
 }
@@ -59,7 +75,7 @@ function adsFile(mode: string): Plugin {
 export default defineConfig(({ mode }) => ({
   // basicSsl + host:true so the camera (getUserMedia) works when testing from a phone over LAN.
   // NO_SSL=1 serves plain http (localhost is a secure context anyway).
-  plugins: [react(), tailwindcss(), ...(process.env.NO_SSL ? [] : [basicSsl()]), adsFile(mode), serviceWorker()],
+  plugins: [react(), tailwindcss(), ...(process.env.NO_SSL ? [] : [basicSsl()]), adsFile(mode), adsVerification(mode), serviceWorker()],
   server: { host: true },
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
 }));

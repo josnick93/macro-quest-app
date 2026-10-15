@@ -8,6 +8,12 @@ export interface AdsConfig {
 const CLIENT = /^ca-pub-\d{10,20}$/;
 const SLOT = /^\d{6,20}$/;
 
+/** ID de editor válido o null. Basta para verificar el sitio y para ads.txt (el bloque se crea tras la aprobación). */
+export function parseAdsClient(client: string | undefined): string | null {
+  const c = client?.trim() ?? "";
+  return CLIENT.test(c) ? c : null;
+}
+
 /** Configuración válida o null (valores ausentes o mal escritos: mejor sin anuncios que con una etiqueta rota). */
 export function parseAdsConfig(client: string | undefined, slot: string | undefined): AdsConfig | null {
   const c = client?.trim() ?? "";
