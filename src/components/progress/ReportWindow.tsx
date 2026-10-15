@@ -4,7 +4,7 @@ import { SystemWindow } from "@/components/SystemWindow";
 import { Seg } from "@/components/ProfileControls";
 import { addDaysISO, formatShortDate } from "@/lib/date";
 import { calcTargets } from "@/lib/nutrition";
-import { dayStats, report, type DayStatus } from "@/lib/progress";
+import { dayStats, report, type DayStatus, type MicroAvg } from "@/lib/progress";
 import { useDiaryRange, useProfile, useToday } from "@/lib/hooks";
 import { axis, GRID, tip } from "./chart";
 
@@ -23,6 +23,52 @@ function Stat({ value, label, className }: { value: string; label: string; class
       <p className={`font-display text-xl font-bold tabular-nums ${className ?? ""}`}>{value}</p>
       <p className="label-sys">{label}</p>
     </div>
+  );
+}
+
+/** Referencias generales para adultos (EFSA y OMS). Solo orientan: pasarse se marca en ámbar. */
+function microRef(m: MicroAvg, avgKcal: number): { text: string; over: boolean } | null {
+  switch (m.key) {
+    case "fiber":
+      return { text: "recomendado ≥ 25 g", over: false };
+    case "salt":
+      return { text: "máx. 5 g", over: m.avg > 5 };
+    case "satFat": {
+      const max = Math.round((avgKcal * 0.1) / 9);
+      return max > 0 ? { text: `máx. ${max} g (10 % kcal)`, over: m.avg > max } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+const COVERAGE_OK = 80;
+const grams = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
+
+function MicroReport({ micros, avgKcal }: { micros: MicroAvg[]; avgKcal: number }) {
+  return (
+    <>
+      <h3 className="label-sys mt-4 mb-2">Fibra, azúcares, saturada y sal</h3>
+      <ul className="divide-border divide-y text-xs">
+        {micros.map((m) => {
+          const ref = microRef(m, avgKcal);
+          return (
+            <li key={m.key} className="py-1.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <span>{m.label}</span>
+                <span className="shrink-0 tabular-nums">
+                  <span className={ref?.over ? "text-over font-semibold" : "font-semibold"}>{grams(m.avg)} g</span>
+                  <span className="text-muted-foreground">/día{ref ? ` · ${ref.text}` : ""}</span>
+                </span>
+              </div>
+              {m.coverage < COVERAGE_OK && (
+                <p className="text-muted-foreground mt-0.5 text-[11px]">Solo el {m.coverage} % de lo que comiste trae este dato: la media real es mayor.</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -101,6 +147,8 @@ export function ReportWindow() {
               </li>
             ))}
           </ul>
+
+          {r.micros.length > 0 && <MicroReport micros={r.micros} avgKcal={r.avg.kcal} />}
 
           {r.top.length > 0 && (
             <>

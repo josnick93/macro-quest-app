@@ -1,8 +1,8 @@
 import type { DiaryEntry, Macros, MealType, Targets, WeightLog } from "./types";
-import { MEALS } from "./types";
+import { MEALS, MICROS } from "./types";
 import { addDaysISO, diffDays, weekdayIndex } from "./date";
 import { weightSlope } from "./goals";
-import { emptyMacros, entryMacros, sumMacros, totalsFor } from "./nutrition";
+import { emptyMacros, entryMacros, scaleMicros, sumMacros, totalsFor } from "./nutrition";
 import { KCAL_TOLERANCE } from "./xp";
 
 // ---------- peso ----------
@@ -113,6 +113,17 @@ export interface TopFood {
   kcal: number;
 }
 
+export type MicroKey = (typeof MICROS)[number]["key"];
+
+export interface MicroAvg {
+  key: MicroKey;
+  label: string;
+  /** Gramos al día de media (días registrados), contando solo los alimentos que traen el dato. */
+  avg: number;
+  /** % de las kcal del periodo que vienen de alimentos con este dato: por debajo de 100, la media se queda corta. */
+  coverage: number;
+}
+
 export interface Report {
   days: number;
   /** Días con algo registrado. Las medias se calculan solo con ellos. */
@@ -124,9 +135,30 @@ export interface Report {
   avgTarget: Macros;
   meals: MealShare[];
   top: TopFood[];
+  micros: MicroAvg[];
 }
 
 export const TOP_FOODS = 5;
+
+/** Medias de fibra, azúcares, grasa saturada y sal. Se omiten los que ningún alimento del periodo trae. */
+export function microAverages(entries: DiaryEntry[], loggedDays: number): MicroAvg[] {
+  const totalKcal = entries.reduce((a, e) => a + entryMacros(e).kcal, 0);
+  return MICROS.flatMap(({ key, label }) => {
+    let grams = 0;
+    let kcal = 0;
+    let seen = false;
+    for (const e of entries) {
+      const v = scaleMicros(e.per100g, e.grams)[key];
+      if (v === undefined) continue;
+      seen = true;
+      grams += v;
+      kcal += entryMacros(e).kcal;
+    }
+    if (!seen || loggedDays === 0) return [];
+    const coverage = totalKcal > 0 ? Math.min(100, Math.round((kcal / totalKcal) * 100)) : 100;
+    return [{ key, label, avg: Math.round((grams / loggedDays) * 10) / 10, coverage }];
+  });
+}
 
 const mean = (list: Macros[]): Macros => {
   const total = sumMacros(list);
@@ -169,6 +201,7 @@ export function report(entries: DiaryEntry[], stats: DayStat[]): Report {
     avgTarget: loggedDays.length ? mean(loggedDays.map((s) => s.target)) : emptyMacros(),
     meals,
     top,
+    micros: microAverages(inRange, loggedDays.length),
   };
 }
 
