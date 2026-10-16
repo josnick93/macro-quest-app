@@ -385,12 +385,12 @@ export function ProfilePage() {
       </SystemWindow>
 
       {DONATE_URL && (
-        <p className="text-muted-foreground text-center text-[11px]">
-          ¿Te sirve Macro Quest?{" "}
-          <a className="text-primary inline-flex items-center gap-1 underline" href={DONATE_URL} target="_blank" rel="noopener noreferrer">
-            <Coffee className="h-3 w-3" aria-hidden /> Invítame a un café
+        <SystemWindow scan={false}>
+          <p className="text-muted-foreground text-sm">¿Te sirve Macro Quest? Es gratis; si quieres apoyarla, invítame a un café.</p>
+          <a className="btn-ghost mt-3 w-full" href={DONATE_URL} target="_blank" rel="noopener noreferrer">
+            <Coffee className="h-4 w-4" aria-hidden /> Invítame a un café
           </a>
-        </p>
+        </SystemWindow>
       )}
 
       {dirty && (
