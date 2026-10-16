@@ -6,6 +6,14 @@ export const OFF_FIELDS = [
   "code",
   "product_name",
   "product_name_es",
+  // Las marcas blancas multinacionales (Lidl, Aldi…) a menudo solo tienen el nombre en otro idioma.
+  "generic_name_es",
+  "product_name_en",
+  "product_name_fr",
+  "product_name_it",
+  "product_name_pt",
+  "product_name_de",
+  "product_name_nl",
   "brands",
   "stores",
   "nutriments",
@@ -13,6 +21,9 @@ export const OFF_FIELDS = [
   "serving_quantity",
   "product_quantity",
 ].join(",");
+
+/** Sube al cambiar `OFF_FIELDS`: invalida las respuestas guardadas en la caché del worker. */
+export const OFF_CACHE_VERSION = "2";
 
 /** OFF limita la búsqueda (~10 peticiones/min por IP): solo se consulta a partir de 3 letras. */
 export const MIN_REMOTE_QUERY = 3;

@@ -94,6 +94,7 @@ describe("rutas y caché", () => {
   });
   it("la clave de caché ignora mayúsculas, espacios y parámetros ajenos", () => {
     expect(cacheKey(new URL("https://app/api/off/search?q=%20Yogur%20%20Griego&x=1"))).toBe(cacheKey(new URL("https://app/api/off/search?q=yogur+griego")));
+    expect(cacheKey(new URL("https://app/api/off/product/123456"))).toContain("v=");
   });
 });
 
