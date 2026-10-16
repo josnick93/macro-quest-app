@@ -12,6 +12,13 @@ export interface OffProduct {
   code?: string;
   product_name?: string;
   product_name_es?: string;
+  generic_name_es?: string;
+  product_name_en?: string;
+  product_name_fr?: string;
+  product_name_it?: string;
+  product_name_pt?: string;
+  product_name_de?: string;
+  product_name_nl?: string;
   brands?: string;
   stores?: string;
   nutriments?: Record<string, number | string | undefined>;
@@ -32,8 +39,14 @@ const opt = (v: unknown): number | undefined => {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
 };
 
+/** Nombre en español si lo hay; si no, el principal o el primero que exista en otro idioma (pasa mucho con Lidl). */
+export const offName = (p: OffProduct): string =>
+  [p.product_name_es, p.product_name, p.generic_name_es, p.product_name_en, p.product_name_fr, p.product_name_it, p.product_name_pt, p.product_name_de, p.product_name_nl]
+    .map((n) => n?.trim() ?? "")
+    .find(Boolean) ?? "";
+
 export function toFood(p: OffProduct): Food | null {
-  const name = (p.product_name_es || p.product_name || "").trim();
+  const name = offName(p);
   if (!name) return null;
   const n = p.nutriments ?? {};
   const kcal = num(n["energy-kcal_100g"]) || Math.round(num(n["energy_100g"]) / 4.184);

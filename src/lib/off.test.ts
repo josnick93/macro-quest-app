@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toFood } from "./off";
+import { offName, toFood } from "./off";
 
 describe("toFood (Open Food Facts)", () => {
   it("extrae macros, micros y raciones", () => {
@@ -35,5 +35,21 @@ describe("toFood (Open Food Facts)", () => {
     expect(toFood({ product_name: "X", nutriments: { energy_100g: 418.4 } })!.per100g.kcal).toBe(100);
     expect(toFood({ product_name: "Vacío", nutriments: {} })).toBeNull();
     expect(toFood({ nutriments: { proteins_100g: 3 } })).toBeNull();
+  });
+
+  it("sin nombre en español usa el de otro idioma (marcas de Lidl)", () => {
+    const f = toFood({
+      code: "4056489996835",
+      product_name: "",
+      product_name_es: "",
+      product_name_en: "High Protein Pudding Sabor Chocolate",
+      product_name_it: "High Protein Budino",
+      brands: "LIDL",
+      nutriments: { "energy-kcal_100g": 83, proteins_100g: 10.1, carbohydrates_100g: 6.5, fat_100g: 1.5 },
+    })!;
+    expect(f.name).toBe("High Protein Pudding Sabor Chocolate");
+    expect(offName({ product_name: "Principal", product_name_en: "English" })).toBe("Principal");
+    expect(offName({ product_name_es: " ", generic_name_es: "Postre lácteo" })).toBe("Postre lácteo");
+    expect(toFood({ product_name: "", nutriments: { "energy-kcal_100g": 83 } })).toBeNull();
   });
 });

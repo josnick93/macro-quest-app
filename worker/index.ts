@@ -11,7 +11,7 @@ import { handleAuth, type AuthEnv } from "./auth";
 import { json } from "./http";
 import { handleSync } from "./sync";
 import { legacyRedirect } from "../src/lib/domain";
-import { isBarcode, MAX_REMOTE_QUERY, MIN_REMOTE_QUERY, normalizeQuery, productUrl, searchUrl, type SearchScope } from "../src/lib/offApi";
+import { isBarcode, MAX_REMOTE_QUERY, OFF_CACHE_VERSION, MIN_REMOTE_QUERY, normalizeQuery, productUrl, searchUrl, type SearchScope } from "../src/lib/offApi";
 
 interface Env extends AuthEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -80,6 +80,7 @@ export function route(url: URL): (() => Promise<Response>) | null {
 /** Clave de caché: la ruta con la búsqueda normalizada, para que "Yogur " y "yogur" compartan entrada. */
 export function cacheKey(url: URL): string {
   const key = new URL(url.pathname, url.origin);
+  key.searchParams.set("v", OFF_CACHE_VERSION);
   const q = url.searchParams.get("q");
   if (q !== null) key.searchParams.set("q", normalizeQuery(q));
   return key.toString();
