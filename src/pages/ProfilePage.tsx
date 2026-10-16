@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, FileSpreadsheet, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
+import { Coffee, Download, FileSpreadsheet, Minus, Plus, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
 import { SystemWindow } from "@/components/SystemWindow";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { ADS, showAdsConsent } from "@/lib/ads";
 import { diaryCsv } from "@/lib/csv";
 import { STORES } from "@/lib/stores";
+import { DONATE_URL } from "@/lib/donate";
 
 const WEEKDAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const WEEKDAY_STEP = 50;
@@ -382,6 +383,15 @@ export function ProfilePage() {
           </button>
         )}
       </SystemWindow>
+
+      {DONATE_URL && (
+        <p className="text-muted-foreground text-center text-[11px]">
+          ¿Te sirve Macro Quest?{" "}
+          <a className="text-primary inline-flex items-center gap-1 underline" href={DONATE_URL} target="_blank" rel="noopener noreferrer">
+            <Coffee className="h-3 w-3" aria-hidden /> Invítame a un café
+          </a>
+        </p>
+      )}
 
       {dirty && (
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg px-4 pb-2">
