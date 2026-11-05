@@ -36,6 +36,9 @@ const GUIDES = [
   { href: "/guia", title: "Calorías y macros", text: "De dónde salen tu gasto, tu objetivo y el reparto de macros, con un ejemplo." },
   { href: "/proteina", title: "Proteína: cuánta y de dónde", text: "Cuánta necesitas según tu objetivo y qué alimentos dan más por caloría." },
   { href: "/etiquetas", title: "Cómo leer una etiqueta", text: "La tabla nutricional, las frases del envase y el Nutri-Score, sin trampas." },
+  { href: "/definir-o-volumen", title: "Definir o ganar volumen", text: "Cuál te conviene, a qué ritmo, cuánto dura cada etapa y cuándo cambiar." },
+  { href: "/comer-y-entrenar", title: "Comer y entrenar", text: "Qué comer antes y después del entreno y qué importa de verdad." },
+  { href: "/registrar", title: "Registrar sin agobios", text: "Crudo o cocinado, el aceite, comer fuera y cuánto error es normal." },
 ];
 
 const STEPS = [
@@ -148,6 +151,10 @@ export function LoginPage({ offline, onRetry }: { offline: boolean; onRetry: () 
             {" · "}
           </span>
         ))}
+        <a className="underline" href="/sobre">
+          Sobre Macro Quest
+        </a>
+        {" · "}
         <a className="underline" href="/privacidad">
           Privacidad
         </a>
