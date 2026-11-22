@@ -17,6 +17,7 @@ import { dayStats } from "./progress";
 import { hasScanned } from "./scanFlag";
 import { bestStreak, characterStats, historyStats, weeklyQuestsDone, type Stat } from "./character";
 import { addDaysISO, msUntilMidnight, todayISO } from "./date";
+import { fetchFuerza, summarizeFuerza, type FuerzaSummary } from "./fuerzaApi";
 
 const opts = { staleTime: 0, refetchOnWindowFocus: false } as const;
 
@@ -233,6 +234,24 @@ export function useSession() {
 /** Cuenta en uso: la de la sesión o, sin conexión, la última que entró en este dispositivo. */
 export function useAccount(): SessionUser | null {
   return activeAccount(useSession().data, rememberedAccount());
+}
+/** Entrenos de Cazador de Fuerza (misma cuenta). Solo con sesión; sin servidor o sin conexión no hay datos. */
+export function useFuerza(): { loaded: boolean; connected: boolean; summary: FuerzaSummary | null } {
+  const account = useAccount();
+  const today = useToday();
+  const query = useQuery({
+    queryKey: ["fuerza", account?.id ?? null],
+    queryFn: fetchFuerza,
+    enabled: account !== null,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+  const data = query.data;
+  return useMemo(
+    () => ({ loaded: query.isFetched, connected: data?.connected ?? false, summary: data ? summarizeFuerza(data, today) : null }),
+    [query.isFetched, data, today],
+  );
 }
 const forgetSession = (qc: QueryClient) => {
   rememberAccount(null);

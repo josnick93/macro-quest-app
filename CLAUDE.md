@@ -55,6 +55,7 @@ worker/         Cloudflare Worker. index.ts: /api/off/search y /api/off/product/
                 España primero y luego todo el catálogo); lo demás lo sirve desde dist.
                 auth.ts + store.ts: login con Google (/api/auth/login|callback|me|logout|delete), usuarios y sesiones en D1.
                 sync.ts: POST /api/sync (copia de los datos de cada usuario en la tabla `records` de D1).
+                fuerza.ts: GET /api/fuerza (entrenos de Cazador de Fuerza; ver Notas).
                 Tests en worker/*.test.ts (los de auth y sync usan una D1 local real vía wrangler)
 ```
 
@@ -98,4 +99,5 @@ worker/         Cloudflare Worker. index.ts: /api/off/search y /api/off/product/
 - Páginas estáticas en `public/` (privacidad, condiciones, `/sobre` y guías: `/guia`, `/proteina`, `/etiquetas`, `/definir-o-volumen`, `/comer-y-entrenar`, `/registrar`): el service worker no las intercepta (`LEGAL` en `sw.template.js`). Una nueva hay que añadirla ahí, en `sitemap.xml` y en `GUIDES` de `LoginPage` si es una guía.
 - Dominio: `macroquestapp.com` (ruta `custom_domain` en `wrangler.jsonc`). El viejo `workers.dev` sigue activo: sin sesión el worker redirige con 301; con sesión la app espera a no tener cambios pendientes y redirige (instalada, avisa para reinstalar). Lógica en `lib/domain.ts` + `DomainMove`. Por eso `run_worker_first` incluye las páginas (`/*` salvo `/assets/*`).
 - Deploy: Cloudflare Workers (`wrangler.jsonc`: worker en `worker/index.ts` para `/api/*`, sirve `dist`, fallback SPA con `not_found_handling`). Build `npm run build`, deploy `npx wrangler deploy`. No usar `_redirects` con `/* /index.html 200`: en Workers se rechaza por bucle.
+- Cazador de Fuerza (`../cazador-de-fuerza`, fuerza.macroquestapp.com): app hermana de fuerza con su propio Worker enlazado a esta misma D1. Comparte `users`/`sessions` (misma cuenta de Google; su cookie es `__Host-fq_session`) y guarda sus datos en `fuerza_records`. Aquí solo se LEE esa tabla (`worker/fuerza.ts` → `FuerzaWindow` en Progreso, `lib/fuerzaApi.ts`); allí solo se lee `records`. Un trigger suyo borra `fuerza_records` al borrar la cuenta. Si cambia el esquema de `users`/`sessions`, cambiarlo también allí.
 - Backend futuro: Go o PocketBase en una Orange Pi expuesta con Cloudflare Tunnel.

@@ -42,7 +42,7 @@ export function AccountWindow() {
       </button>
       {confirming ? (
         <div className="mt-3 space-y-2">
-          <p className="text-xs">Se borrarán del servidor tu cuenta y la copia de tus datos. Lo que hay en este dispositivo no se toca.</p>
+          <p className="text-xs">Se borrarán del servidor tu cuenta y la copia de tus datos (también tus entrenos de Cazador de Fuerza, que usa esta misma cuenta). Lo que hay en este dispositivo no se toca.</p>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" className="btn-ghost min-h-11 text-xs" onClick={() => setConfirming(false)}>
               Cancelar

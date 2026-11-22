@@ -3,11 +3,13 @@
  * - Reintenta los 503 intermitentes de OFF, que el navegador ve como fallo de red.
  * - Guarda las respuestas en la caché de Cloudflare: una búsqueda repetida no vuelve a OFF.
  * - Si en España no hay resultados, busca en todo el catálogo.
- * También atiende el login (/api/auth/*, ver auth.ts) y la sincronización de datos (/api/sync, ver sync.ts).
+ * También atiende el login (/api/auth/*, ver auth.ts), la sincronización de datos (/api/sync, ver sync.ts) y los
+ * entrenos de Cazador de Fuerza, la app hermana que comparte esta base (/api/fuerza, ver fuerza.ts).
  * Todo lo que no sea /api/* se sirve desde los archivos estáticos de la app.
  * En el dominio viejo (workers.dev), las visitas sin sesión se redirigen a macroquestapp.com (ver src/lib/domain.ts).
  */
 import { handleAuth, type AuthEnv } from "./auth";
+import { handleFuerza } from "./fuerza";
 import { json } from "./http";
 import { handleSync } from "./sync";
 import { legacyRedirect } from "../src/lib/domain";
@@ -106,6 +108,14 @@ export default {
       } catch (e) {
         console.error("sync", e);
         return json({ error: "Error al sincronizar" }, 500);
+      }
+    }
+    if (url.pathname === "/api/fuerza") {
+      try {
+        return await handleFuerza(request, env);
+      } catch (e) {
+        console.error("fuerza", e);
+        return json({ error: "Error al leer los entrenos" }, 500);
       }
     }
     if (request.method !== "GET") return json({ error: "Método no permitido" }, 405);
