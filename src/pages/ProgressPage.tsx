@@ -2,6 +2,7 @@ import { AdBanner } from "@/components/AdBanner";
 import { SystemWindow } from "@/components/SystemWindow";
 import { XPBar } from "@/components/XPBar";
 import { CalendarWindow } from "@/components/progress/CalendarWindow";
+import { FuerzaWindow } from "@/components/progress/FuerzaWindow";
 import { ReportWindow } from "@/components/progress/ReportWindow";
 import { WeightWindow } from "@/components/progress/WeightWindow";
 import { AchievementsWindow } from "@/components/progress/AchievementsWindow";
@@ -22,6 +23,7 @@ export function ProgressPage() {
 
       <XPBar xp={game.xp} activeDays={game.activeDays} today={today} />
       <WeightWindow />
+      <FuerzaWindow />
       <ReportWindow />
       <CalendarWindow />
       <AchievementsWindow unlocked={game.achievements} />
